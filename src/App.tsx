@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Header from './components/Header';
 import Menu from './components/Menu';
 import Grid from './components/Grid';
+import PDFViewer from './components/PDFViewer';
 import type { MenuItem } from './types';
 
 // Datos mock temporales
@@ -21,8 +22,6 @@ function App() {
 
   const handleItemClick = (item: MenuItem) => {
     setSelectedItem(item);
-    // En el Milestone 3 implementaremos el visor de PDFs
-    console.log('Item seleccionado:', item);
   };
 
   const handleGoHome = () => {
@@ -44,23 +43,12 @@ function App() {
       />
 
       {selectedItem ? (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <span className="text-6xl mb-4 block">{selectedItem.icon}</span>
-            <h2 className="text-2xl font-semibold text-gray-800 mb-2">
-              {selectedItem.title}
-            </h2>
-            <p className="text-gray-600 mb-4">
-              Visor de PDF - Próximamente en Milestone 3
-            </p>
-            <button
-              onClick={handleGoHome}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-150 active:scale-95"
-            >
-              Volver al inicio
-            </button>
-          </div>
-        </div>
+        <PDFViewer
+          pdfUrl={selectedItem.pdfUrl || ''}
+          title={selectedItem.title}
+          icon={selectedItem.icon}
+          onClose={handleGoHome}
+        />
       ) : (
         <Grid items={mockItems} onItemClick={handleItemClick} />
       )}

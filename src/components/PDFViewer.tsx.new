@@ -1,0 +1,286 @@
+import { useEffect, useRef, useState } from 'react';
+import { Document, Page, pdfjs } from 'react-pdf';
+import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut, RotateCw, Maximize2, Minimize2 } from 'lucide-react';
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
+
+// Configurar worker de PDF.js con mayor resolución
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
+interface PDFViewerProps {
+  pdfUrl: string;
+  title: string;
+  icon: string;
+  onClose: () => void;
+}
+
+export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerProps) {
+  const [numPages, setNumPages] = useState<number>(0);
+  const [pageNumber, setPageNumber] = useState<number>(1);
+  const [error, setError] = useState<string>('');
+  const [scale, setScale] = useState<number>(1);
+  const [rotation, setRotation] = useState<number>(0);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState<number>(0);
+
+  // Ajustar tamaño del contenedor
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    
+    const updateSize = () => {
+      if (el) {
+        const width = Math.min(el.clientWidth, 1400);
+        setContainerWidth(width);
+      }
+    };
+    
+    const ro = new ResizeObserver(updateSize);
+    ro.observe(el);
+    updateSize();
+    
+    return () => ro.disconnect();
+  }, [isFullscreen]);
+
+  // Manejar teclas de acceso rápido
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        toggleFullscreen();
+      } else if (e.key === '+' || (e.ctrlKey && e.key === '=')) {
+        e.preventDefault();
+        zoomIn();
+      } else if (e.key === '-' || (e.ctrlKey && e.key === '-')) {
+        e.preventDefault();
+        zoomOut();
+      } else if (e.key === '0' && e.ctrlKey) {
+        e.preventDefault();
+        resetZoom();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        rotate();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        goToPrevPage();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        goToNextPage();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
+
+  function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
+    setNumPages(numPages);
+    setError('');
+  }
+
+  function onDocumentLoadError(error: Error) {
+    console.error('Error al cargar PDF:', error);
+    setError('No se pudo cargar el documento PDF');
+  }
+
+  // Navegación
+  const goToPrevPage = () => setPageNumber(prev => Math.max(prev - 1, 1));
+  const goToNextPage = () => setPageNumber(prev => Math.min(prev + 1, numPages));
+
+  // Controles de zoom
+  const zoomIn = () => setScale(prev => Math.min(prev + 0.2, 3));
+  const zoomOut = () => setScale(prev => Math.max(prev - 0.2, 0.5));
+  const resetZoom = () => setScale(1);
+  const rotate = () => setRotation(prev => (prev + 90) % 360);
+  
+  // Pantalla completa
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      containerRef.current?.requestFullscreen().catch(console.error);
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen().catch(console.error);
+      setIsFullscreen(false);
+    }
+  };
+
+  // Calcular el ancho de la página con zoom
+  const getPageWidth = () => {
+    if (containerWidth === 0) return undefined;
+    const maxWidth = isFullscreen ? 1600 : 1200;
+    return Math.min(containerWidth * scale, maxWidth);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-0 sm:p-4">
+      <div className={`bg-white ${isFullscreen ? 'rounded-none' : 'rounded-lg'} shadow-2xl w-full h-full sm:max-w-[95vw] sm:max-h-[95vh] flex flex-col transition-all duration-300`}>
+        {/* Header */}
+        <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200 bg-white sticky top-0 z-10">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <span className="text-2xl sm:text-3xl flex-shrink-0">{icon}</span>
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-800 truncate">{title}</h2>
+          </div>
+          <div className="flex items-center gap-1 sm:gap-2">
+            {/* Controles de zoom */}
+            <div className="hidden sm:flex items-center bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={zoomOut}
+                className="p-1.5 rounded-md hover:bg-gray-200 transition-colors duration-150"
+                aria-label="Alejar"
+                title="Alejar (Ctrl + -)"
+              >
+                <ZoomOut className="w-4 h-4 text-gray-700" />
+              </button>
+              <button
+                onClick={resetZoom}
+                className="px-2 py-1 text-sm font-medium text-gray-700 min-w-[50px] text-center"
+                title="Restablecer zoom (Ctrl + 0)"
+              >
+                {Math.round(scale * 100)}%
+              </button>
+              <button
+                onClick={zoomIn}
+                className="p-1.5 rounded-md hover:bg-gray-200 transition-colors duration-150"
+                aria-label="Acercar"
+                title="Acercar (Ctrl + +)"
+              >
+                <ZoomIn className="w-4 h-4 text-gray-700" />
+              </button>
+            </div>
+
+            {/* Botón de rotación */}
+            <button
+              onClick={rotate}
+              className="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-150 hidden sm:block"
+              aria-label="Rotar"
+              title="Rotar (R)"
+            >
+              <RotateCw className="w-5 h-5 text-gray-700" />
+            </button>
+
+            {/* Botón de pantalla completa */}
+            <button
+              onClick={toggleFullscreen}
+              className="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-150 hidden sm:block"
+              aria-label={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
+              title={isFullscreen ? "Salir de pantalla completa (Esc)" : "Pantalla completa (F11)"}
+            >
+              {isFullscreen ? (
+                <Minimize2 className="w-5 h-5 text-gray-700" />
+              ) : (
+                <Maximize2 className="w-5 h-5 text-gray-700" />
+              )}
+            </button>
+
+            {/* Botón de cerrar */}
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-150"
+              aria-label="Cerrar visor"
+              title="Cerrar (Esc)"
+            >
+              <X className="w-5 h-5 text-gray-700" />
+            </button>
+          </div>
+        </div>
+
+        {/* Contenido del PDF */}
+        <div 
+          ref={containerRef} 
+          className="flex-1 overflow-hidden bg-gray-100 relative"
+        >
+          {error ? (
+            <div className="absolute inset-0 flex items-center justify-center p-4 text-center">
+              <div>
+                <p className="text-red-600 mb-4">{error}</p>
+                <p className="text-gray-600 text-sm">
+                  Asegúrate de que el archivo exista en la carpeta <code className="bg-gray-200 px-2 py-1 rounded">public/pdfs</code>
+                </p>
+              </div>
+            </div>
+          ) : (
+            <TransformWrapper
+              initialScale={1}
+              minScale={0.5}
+              maxScale={3}
+              wheel={{ step: 0.1, smoothStep: 0.01 }}
+              doubleClick={{ disabled: true }}
+              centerOnInit={true}
+              centerZoomedOut={true}
+              disablePadding={true}
+              limitToBounds={false}
+              velocityAnimation={{ disabled: true }}
+            >
+              {({ zoomIn, zoomOut, resetTransform, zoomToElement }) => (
+                <div className="w-full h-full">
+                  <TransformComponent 
+                    wrapperClass="w-full h-full" 
+                    contentClass="flex items-center justify-center min-h-full"
+                  >
+                    <Document
+                      file={pdfUrl}
+                      onLoadSuccess={onDocumentLoadSuccess}
+                      onLoadError={onDocumentLoadError}
+                      loading={
+                        <div className="text-gray-600">
+                          Cargando documento...
+                        </div>
+                      }
+                    >
+                      <Page
+                        pageNumber={pageNumber}
+                        renderTextLayer={false}
+                        renderAnnotationLayer={false}
+                        scale={scale * window.devicePixelRatio}
+                        width={getPageWidth()}
+                        rotate={rotation}
+                        className="shadow-lg"
+                        loading={
+                          <div className="text-gray-600">
+                            Cargando página...
+                          </div>
+                        }
+                      />
+                    </Document>
+                  </TransformComponent>
+                </div>
+              )}
+            </TransformWrapper>
+          )}
+        </div>
+
+        {/* Controles de navegación */}
+        {!error && numPages > 0 && (
+          <div className="bg-white border-t border-gray-200 p-2 sm:p-3 sticky bottom-0 z-10">
+            <div className="flex items-center justify-between max-w-2xl mx-auto w-full">
+              <button
+                onClick={goToPrevPage}
+                disabled={pageNumber <= 1}
+                className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-150 active:scale-95"
+                title="Página anterior (Flecha izquierda)"
+              >
+                <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="text-sm sm:text-base">Anterior</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <span className="text-sm sm:text-base font-medium text-gray-700">
+                  Página {pageNumber} de {numPages}
+                </span>
+              </div>
+
+              <button
+                onClick={goToNextPage}
+                disabled={pageNumber >= numPages}
+                className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-150 active:scale-95"
+                title="Siguiente página (Flecha derecha)"
+              >
+                <span className="text-sm sm:text-base">Siguiente</span>
+                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
