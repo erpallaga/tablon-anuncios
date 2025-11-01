@@ -5,21 +5,32 @@ import AdminPanel from './admin/AdminPanel';
 interface AdminModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAuthenticate: (password: string) => boolean;
+  onAuthenticate: (password: string) => Promise<boolean> | boolean;
 }
 
 export default function AdminModal({ isOpen, onClose, onAuthenticate }: AdminModalProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (onAuthenticate(password)) {
-      setIsAuthenticated(true);
-      setError('');
-    } else {
-      setError('Contraseña incorrecta');
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      const result = await onAuthenticate(password);
+      if (result) {
+        setIsAuthenticated(true);
+        setError('');
+      } else {
+        setError('Contraseña incorrecta');
+      }
+    } catch (err) {
+      setError('Error al verificar la contraseña');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -72,9 +83,10 @@ export default function AdminModal({ isOpen, onClose, onAuthenticate }: AdminMod
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                disabled={isLoading}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Acceder
+                {isLoading ? 'Verificando...' : 'Acceder'}
               </button>
             </div>
           </form>
