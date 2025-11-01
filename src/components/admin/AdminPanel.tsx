@@ -11,7 +11,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
     addGridItem,
     updateGridItem,
     deleteGridItem,
-    announcements,
+    allAnnouncements,
     addAnnouncement,
     updateAnnouncement,
     deleteAnnouncement,
@@ -24,19 +24,24 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
   const [showGridItemForm, setShowGridItemForm] = useState(false);
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
 
-  const handleSaveGridItem = (itemData: Omit<GridItem, 'id'>) => {
-    if (editingItem) {
-      updateGridItem(editingItem.id, itemData);
-    } else {
-      // Al agregar un nuevo elemento, se le asigna un orden al final de la lista
-      const newOrder = gridItems.length > 0 ? Math.max(...gridItems.map(i => i.order ?? 0)) + 1 : 0;
-      addGridItem({
-        ...itemData,
-        order: newOrder
-      });
+  const handleSaveGridItem = async (itemData: Omit<GridItem, 'id'>) => {
+    try {
+      if (editingItem) {
+        await updateGridItem(editingItem.id, itemData);
+      } else {
+        // Al agregar un nuevo elemento, se le asigna un orden al final de la lista
+        const newOrder = gridItems.length > 0 ? Math.max(...gridItems.map(i => i.order ?? 0)) + 1 : 0;
+        await addGridItem({
+          ...itemData,
+          order: newOrder
+        });
+      }
+      setShowGridItemForm(false);
+      setEditingItem(null);
+    } catch (error) {
+      console.error('Error saving grid item:', error);
+      // You might want to show an error message to the user here
     }
-    setShowGridItemForm(false);
-    setEditingItem(null);
   };
 
   // Función para mover un elemento del grid hacia arriba o abajo
@@ -72,7 +77,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
   };
 
   // Función para mover un anuncio hacia arriba o abajo
-  const moveAnnouncement = (id: string, direction: 'up' | 'down') => {
+  const moveAnnouncement = async (id: string, direction: 'up' | 'down') => {
     const sortedAnnouncements = [...announcements].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     const currentIndex = sortedAnnouncements.findIndex(announcement => announcement.id === id);
     
@@ -94,24 +99,33 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
     }));
     
     // Actualizar el estado global
-    updatedAnnouncements.forEach(announcement => {
-      updateAnnouncement(announcement.id, {
-        title: announcement.title,
-        content: announcement.content,
-        isActive: announcement.isActive,
-        order: announcement.order
-      });
-    });
+    try {
+      await Promise.all(updatedAnnouncements.map(announcement =>
+        updateAnnouncement(announcement.id, {
+          title: announcement.title,
+          content: announcement.content,
+          isActive: announcement.isActive,
+          order: announcement.order
+        })
+      ));
+    } catch (error) {
+      console.error('Error moving announcement:', error);
+    }
   };
 
-  const handleSaveAnnouncement = (announcementData: Omit<Announcement, 'id' | 'createdAt' | 'updatedAt' | 'isActive'>) => {
-    if (editingAnnouncement) {
-      updateAnnouncement(editingAnnouncement.id, announcementData);
-    } else {
-      addAnnouncement(announcementData);
+  const handleSaveAnnouncement = async (announcementData: Omit<Announcement, 'id' | 'createdAt' | 'updatedAt' | 'isActive'>) => {
+    try {
+      if (editingAnnouncement) {
+        await updateAnnouncement(editingAnnouncement.id, announcementData);
+      } else {
+        await addAnnouncement(announcementData);
+      }
+      setShowAnnouncementForm(false);
+      setEditingAnnouncement(null);
+    } catch (error) {
+      console.error('Error saving announcement:', error);
+      // You might want to show an error message to the user here
     }
-    setShowAnnouncementForm(false);
-    setEditingAnnouncement(null);
   };
 
   const handleEditGridItem = (item: GridItem) => {
@@ -256,7 +270,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
             <h2 className="text-lg font-medium text-gray-900 mb-4">Anuncios</h2>
             <div className="bg-white shadow overflow-hidden sm:rounded-md">
               <ul className="divide-y divide-gray-200">
-                {[...announcements]
+                {[...allAnnouncements]
                   .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
                   .map((announcement, index, sortedAnnouncements) => (
                   <li key={announcement.id} className="px-4 py-4 flex items-center justify-between group">
