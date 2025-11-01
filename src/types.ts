@@ -13,6 +13,7 @@ export interface Announcement {
   title: string;
   content: string;
   isActive: boolean;
+  order?: number;
   createdAt: string;
   updatedAt: string;
 }
