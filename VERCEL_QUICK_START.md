@@ -12,12 +12,21 @@
 
 ## 🎯 5-Minute Deployment Steps
 
-### 1. Push Your Code (if not already done)
-```bash
-git add .
-git commit -m "Prepare for Vercel deployment"
-git push origin deployment-setup
-```
+### 1. Create Pull Request (Recommended) ✅
+
+Since you're on `deployment-setup` branch, merge it to `master`:
+
+**Option A: Via GitHub (Recommended)**
+1. Go to your repository on GitHub
+2. You should see a banner suggesting to create a PR for `deployment-setup`
+3. Click **"Compare & pull request"**
+4. Add a title: `Add Vercel deployment configuration`
+5. Click **"Create pull request"**
+6. Review the changes, then click **"Merge pull request"**
+
+**Option B: Deploy from current branch first**
+- You can deploy from `deployment-setup` to test, then merge later
+- Vercel will create preview deployments for this branch
 
 ### 2. Sign Up for Vercel
 👉 **[https://vercel.com](https://vercel.com)** → Click "Sign Up" → Use GitHub
@@ -26,6 +35,7 @@ git push origin deployment-setup
 - Click **"Add New..."** → **"Project"**
 - Find **`tablon-anuncios`** repository
 - Click **"Import"**
+- **Production Branch**: Select `master` (or keep default)
 
 ### 4. Add Environment Variables
 Before clicking Deploy, scroll down and add:
@@ -56,8 +66,8 @@ VITE_MASTER_PASSWORD = your_password (optional)
 ## 🔗 After Deployment
 
 - **Production URL**: `https://tablon-anuncios.vercel.app`
-- **Automatic Deploys**: Every push to main branch
-- **Preview Deploys**: Every pull request
+- **Automatic Deploys**: Every push to `master` branch
+- **Preview Deploys**: Every pull request and feature branch
 
 ---
 
