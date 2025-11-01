@@ -39,7 +39,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
     setEditingItem(null);
   };
 
-  // Función para mover un elemento hacia arriba o abajo
+  // Función para mover un elemento del grid hacia arriba o abajo
   const moveItem = (id: string, direction: 'up' | 'down') => {
     const items = [...gridItems].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     const currentIndex = items.findIndex(item => item.id === id);
@@ -67,6 +67,39 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
         icon: item.icon,
         pdfUrl: item.pdfUrl,
         order: item.order
+      });
+    });
+  };
+
+  // Función para mover un anuncio hacia arriba o abajo
+  const moveAnnouncement = (id: string, direction: 'up' | 'down') => {
+    const sortedAnnouncements = [...announcements].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const currentIndex = sortedAnnouncements.findIndex(announcement => announcement.id === id);
+    
+    if (currentIndex === -1) return;
+    
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    
+    // Verificar que el nuevo índice sea válido
+    if (newIndex < 0 || newIndex >= sortedAnnouncements.length) return;
+    
+    // Intercambiar los elementos
+    [sortedAnnouncements[currentIndex], sortedAnnouncements[newIndex]] = 
+      [sortedAnnouncements[newIndex], sortedAnnouncements[currentIndex]];
+    
+    // Actualizar el orden de los elementos
+    const updatedAnnouncements = sortedAnnouncements.map((announcement, index) => ({
+      ...announcement,
+      order: index
+    }));
+    
+    // Actualizar el estado global
+    updatedAnnouncements.forEach(announcement => {
+      updateAnnouncement(announcement.id, {
+        title: announcement.title,
+        content: announcement.content,
+        isActive: announcement.isActive,
+        order: announcement.order
       });
     });
   };
@@ -223,11 +256,33 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
             <h2 className="text-lg font-medium text-gray-900 mb-4">Anuncios</h2>
             <div className="bg-white shadow overflow-hidden sm:rounded-md">
               <ul className="divide-y divide-gray-200">
-                {announcements.map((announcement) => (
-                  <li key={announcement.id} className="px-4 py-4 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{announcement.title}</p>
-                      <p className="text-sm text-gray-500">{announcement.content}</p>
+                {[...announcements]
+                  .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                  .map((announcement, index, sortedAnnouncements) => (
+                  <li key={announcement.id} className="px-4 py-4 flex items-center justify-between group">
+                    <div className="flex items-center space-x-3">
+                      <div className="flex flex-col space-y-1">
+                        <button
+                          onClick={() => moveAnnouncement(announcement.id, 'up')}
+                          disabled={index === 0}
+                          className={`p-1 text-gray-300 hover:text-gray-600 rounded ${index === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-100'}`}
+                          title="Mover arriba"
+                        >
+                          <ChevronUp className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => moveAnnouncement(announcement.id, 'down')}
+                          disabled={index === sortedAnnouncements.length - 1}
+                          className={`p-1 text-gray-300 hover:text-gray-600 rounded ${index === sortedAnnouncements.length - 1 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-100'}`}
+                          title="Mover abajo"
+                        >
+                          <ChevronDown className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{announcement.title}</p>
+                        <p className="text-sm text-gray-500">{announcement.content}</p>
+                      </div>
                     </div>
                     <div className="flex items-center space-x-2">
                       <button
