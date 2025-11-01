@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { MenuItem } from '../types';
 import AdminModal from './AdminModal';
+import { authService } from '../lib/supabase/auth';
 
 interface GridProps {
   items: MenuItem[];
@@ -10,9 +11,6 @@ interface GridProps {
 export default function Grid({ items, onItemClick }: GridProps) {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
 
-  // Contraseña de administración (en producción, esto debería estar en una variable de entorno)
-  const ADMIN_PASSWORD = 'admin123';
-
   const handleAdminClick = () => {
     setIsAdminOpen(true);
   };
@@ -21,8 +19,8 @@ export default function Grid({ items, onItemClick }: GridProps) {
     setIsAdminOpen(false);
   };
 
-  const handleAuthenticate = (password: string) => {
-    return password === ADMIN_PASSWORD;
+  const handleAuthenticate = async (password: string) => {
+    return await authService.verifyMasterPassword(password);
   };
   // Ordenar los elementos por la propiedad 'order'
   const sortedItems = [...items].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));

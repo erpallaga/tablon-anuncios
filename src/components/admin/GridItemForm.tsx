@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { X, Save } from 'lucide-react';
+import { X, Save, Upload, Loader2 } from 'lucide-react';
 import type { GridItem } from '../../types';
+import { storageService } from '../../lib/supabase/storage';
 
 interface GridItemFormProps {
   item: GridItem | null;
-  onSave: (item: Omit<GridItem, 'id' | 'order'>) => void;
+  onSave: (item: Omit<GridItem, 'id' | 'order'>) => Promise<void> | void;
   onCancel: () => void;
   isNew?: boolean;
 }
@@ -15,10 +16,15 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
   const [formData, setFormData] = useState<Omit<GridItem, 'id' | 'order'>>(
     item || { title: '', icon: '📄', pdfUrl: '' }
   );
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [useFileUpload, setUseFileUpload] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (item) {
       setFormData(item);
+      setUseFileUpload(false);
     }
   }, [item]);
 
@@ -30,9 +36,44 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.type !== 'application/pdf') {
+        setError('Por favor selecciona un archivo PDF');
+        return;
+      }
+      setSelectedFile(file);
+      setError('');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    setError('');
+
+    try {
+      let pdfUrl = formData.pdfUrl;
+
+      // If uploading a new file
+      if (useFileUpload && selectedFile) {
+        setUploading(true);
+        pdfUrl = await storageService.uploadPDF(selectedFile, selectedFile.name);
+      }
+
+      // If editing and deleting old file, we'd need to track the old URL
+      // For simplicity, we'll skip that for now - just upload new file
+
+      await onSave({
+        ...formData,
+        pdfUrl,
+      });
+    } catch (err: any) {
+      console.error('Error saving grid item:', err);
+      setError(err.message || 'Error al guardar el elemento');
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -87,21 +128,75 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              URL del PDF
-            </label>
-            <input
-              type="text"
-              name="pdfUrl"
-              value={formData.pdfUrl}
-              onChange={handleChange}
-              placeholder="/pdfs/ejemplo.pdf"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Asegúrate de que el archivo exista en la carpeta public/pdfs
-            </p>
+            <div className="flex items-center gap-4 mb-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <input
+                  type="radio"
+                  checked={!useFileUpload}
+                  onChange={() => setUseFileUpload(false)}
+                  className="text-blue-600"
+                />
+                URL del PDF
+              </label>
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <input
+                  type="radio"
+                  checked={useFileUpload}
+                  onChange={() => setUseFileUpload(true)}
+                  className="text-blue-600"
+                />
+                Subir archivo PDF
+              </label>
+            </div>
+
+            {useFileUpload ? (
+              <div>
+                <label 
+                  htmlFor="pdf-upload"
+                  className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100"
+                >
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                    <Upload className="w-8 h-8 mb-2 text-gray-500" />
+                    <p className="mb-2 text-sm text-gray-500">
+                      <span className="font-semibold">Clic para subir</span> o arrastra el archivo
+                    </p>
+                    <p className="text-xs text-gray-500">PDF únicamente</p>
+                  </div>
+                  <input
+                    id="pdf-upload"
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,application/pdf"
+                    onChange={handleFileChange}
+                    disabled={uploading}
+                  />
+                </label>
+                {selectedFile && (
+                  <p className="mt-2 text-sm text-gray-600">
+                    Archivo seleccionado: {selectedFile.name}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div>
+                <input
+                  type="text"
+                  name="pdfUrl"
+                  value={formData.pdfUrl}
+                  onChange={handleChange}
+                  placeholder="https://ejemplo.com/documento.pdf o URL de Supabase"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required={!useFileUpload}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  URL completa del PDF (puede ser de Supabase o externa)
+                </p>
+              </div>
+            )}
+
+            {error && (
+              <p className="mt-2 text-sm text-red-600">{error}</p>
+            )}
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
@@ -114,10 +209,20 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 flex items-center gap-2"
+              disabled={uploading || (useFileUpload && !selectedFile)}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Save className="w-4 h-4" />
-              {isNew ? 'Crear' : 'Guardar'}
+              {uploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Subiendo...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  {isNew ? 'Crear' : 'Guardar'}
+                </>
+              )}
             </button>
           </div>
         </form>

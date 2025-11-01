@@ -1,7 +1,7 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import type { GridItem, Announcement } from '../types';
+import { gridItemsService, announcementsService } from '../lib/supabase/database';
 
 interface AppContextType {
   // Estado del panel de administración
@@ -10,135 +10,144 @@ interface AppContextType {
   
   // Elementos de la cuadrícula
   gridItems: GridItem[];
-  addGridItem: (item: Omit<GridItem, 'id'>) => void;
-  updateGridItem: (id: string, updates: Partial<GridItem>) => void;
-  deleteGridItem: (id: string) => void;
+  addGridItem: (item: Omit<GridItem, 'id'>) => Promise<void>;
+  updateGridItem: (id: string, updates: Partial<GridItem>) => Promise<void>;
+  deleteGridItem: (id: string) => Promise<void>;
   
-  // Anuncios
-  announcements: Announcement[];
-  addAnnouncement: (announcement: Omit<Announcement, 'id' | 'createdAt' | 'updatedAt' | 'isActive'>) => void;
-  updateAnnouncement: (id: string, updates: Partial<Announcement>) => void;
-  deleteAnnouncement: (id: string) => void;
-  toggleAnnouncement: (id: string) => void;
+  // Anuncios (activos para mostrar, todos para admin)
+  announcements: Announcement[]; // Solo activos
+  allAnnouncements: Announcement[]; // Todos (para admin panel)
+  addAnnouncement: (announcement: Omit<Announcement, 'id' | 'createdAt' | 'updatedAt' | 'isActive'>) => Promise<void>;
+  updateAnnouncement: (id: string, updates: Partial<Announcement>) => Promise<void>;
+  deleteAnnouncement: (id: string) => Promise<void>;
+  toggleAnnouncement: (id: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Datos iniciales de ejemplo
-const initialGridItems: GridItem[] = [
-  { id: '1', title: 'Reunión Vida y Ministerio', icon: '📖', pdfUrl: '/pdfs/reunion-vida-ministerio.pdf', order: 1 },
-  { id: '2', title: 'Reunión Fin de Semana', icon: '🎤', pdfUrl: '/pdfs/reunion-fin-semana.pdf', order: 2 },
-  { id: '3', title: 'Programa de limpieza', icon: '🧹', pdfUrl: '/pdfs/programa-limpieza.pdf', order: 3 },
-  { id: '4', title: 'Programa de PPOC', icon: '📅', pdfUrl: '/pdfs/programa-ppoc.pdf', order: 4 },
-  { id: '5', title: 'Programa de Salidas', icon: '💼', pdfUrl: '/pdfs/programa-salidas.pdf', order: 5 },
-  { id: '6', title: 'Programa de responsabilidades', icon: '📋', pdfUrl: '/pdfs/programa-responsabilidades.pdf', order: 6 },
-  { id: '7', title: 'Grupos de Predicación', icon: '👥', pdfUrl: '/pdfs/grupos-predicacion.pdf', order: 7 },
-];
-
-const initialAnnouncements: Announcement[] = [
-  {
-    id: '1',
-    title: 'Recordatorio importante',
-    content: 'No olviden traer sus Biblias a las reuniones.',
-    isActive: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
-
 export function AppProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
-  const [gridItems, setGridItems] = useState<GridItem[]>(() => {
-    // En una aplicación real, aquí cargarías los datos de localStorage o una API
-    return initialGridItems;
-  });
-  
-  const [announcements, setAnnouncements] = useState<Announcement[]>(() => {
-    // En una aplicación real, aquí cargarías los datos de localStorage o una API
-    return initialAnnouncements;
-  });
+  const [gridItems, setGridItems] = useState<GridItem[]>([]);
+  const [allAnnouncements, setAllAnnouncements] = useState<Announcement[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Load data from Supabase on mount
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [items, announcements] = await Promise.all([
+        gridItemsService.getAll(),
+        announcementsService.getAll(),
+      ]);
+      setGridItems(items);
+      setAllAnnouncements(announcements);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Funciones para manejar los elementos de la cuadrícula
-  const addGridItem = (item: Omit<GridItem, 'id'>) => {
-    setGridItems(prev => {
-      const newItem = {
+  const addGridItem = async (item: Omit<GridItem, 'id'>) => {
+    try {
+      const newOrder = gridItems.length > 0 ? Math.max(...gridItems.map(i => i.order || 0)) + 1 : 0;
+      const newItem = await gridItemsService.create({
         ...item,
-        id: uuidv4(),
-        order: item.order !== undefined ? item.order : prev.length > 0 ? Math.max(...prev.map(i => i.order || 0)) + 1 : 0,
-      };
-      return [...prev, newItem];
-    });
+        order: newOrder,
+      });
+      setGridItems(prev => [...prev, newItem]);
+    } catch (error) {
+      console.error('Error adding grid item:', error);
+      throw error;
+    }
   };
 
-  const updateGridItem = (id: string, updates: Partial<GridItem>) => {
-    setGridItems(prev =>
-      prev.map(item =>
-        item.id === id ? { ...item, ...updates, updatedAt: new Date().toISOString() } : item
-      )
-    );
+  const updateGridItem = async (id: string, updates: Partial<GridItem>) => {
+    try {
+      const updated = await gridItemsService.update(id, updates);
+      setGridItems(prev =>
+        prev.map(item => item.id === id ? updated : item)
+      );
+    } catch (error) {
+      console.error('Error updating grid item:', error);
+      throw error;
+    }
   };
 
-  const deleteGridItem = (id: string) => {
-    setGridItems(prev => prev.filter(item => item.id !== id));
+  const deleteGridItem = async (id: string) => {
+    try {
+      await gridItemsService.delete(id);
+      setGridItems(prev => prev.filter(item => item.id !== id));
+    } catch (error) {
+      console.error('Error deleting grid item:', error);
+      throw error;
+    }
   };
 
   // Funciones para manejar los anuncios
-  const addAnnouncement = (announcement: Omit<Announcement, 'id' | 'createdAt' | 'updatedAt' | 'isActive' | 'order'>) => {
-    const now = new Date().toISOString();
-    setAnnouncements(prev => {
-      const newOrder = prev.length > 0 ? Math.max(...prev.map(a => a.order || 0)) + 1 : 0;
-      return [
-        ...prev,
-        {
-          ...announcement,
-          id: uuidv4(),
-          isActive: true,
-          order: newOrder,
-          createdAt: now,
-          updatedAt: now,
-        },
-      ];
-    });
+  const addAnnouncement = async (announcement: Omit<Announcement, 'id' | 'createdAt' | 'updatedAt' | 'isActive' | 'order'>) => {
+    try {
+      const newOrder = allAnnouncements.length > 0 ? Math.max(...allAnnouncements.map(a => a.order || 0)) + 1 : 0;
+      const newAnnouncement = await announcementsService.create({
+        ...announcement,
+        order: newOrder,
+      });
+      setAllAnnouncements(prev => [...prev, newAnnouncement]);
+    } catch (error) {
+      console.error('Error adding announcement:', error);
+      throw error;
+    }
   };
 
-  const updateAnnouncement = (id: string, updates: Partial<Omit<Announcement, 'id' | 'createdAt' | 'updatedAt'>>) => {
-    setAnnouncements(prev => {
-      const updated = prev.map(announcement =>
-        announcement.id === id 
-          ? { 
-              ...announcement, 
-              ...updates, 
-              updatedAt: new Date().toISOString() 
-            } 
-          : announcement
+  const updateAnnouncement = async (id: string, updates: Partial<Omit<Announcement, 'id' | 'createdAt' | 'updatedAt'>>) => {
+    try {
+      const updated = await announcementsService.update(id, updates);
+      setAllAnnouncements(prev =>
+        prev.map(announcement => announcement.id === id ? updated : announcement)
       );
-      
-      // Si se actualizó el orden, reordenar la lista
-      if (updates.order !== undefined) {
-        return [...updated].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      }
-      
-      return updated;
-    });
+    } catch (error) {
+      console.error('Error updating announcement:', error);
+      throw error;
+    }
   };
 
-  const deleteAnnouncement = (id: string) => {
-    setAnnouncements(prev => prev.filter(announcement => announcement.id !== id));
+  const deleteAnnouncement = async (id: string) => {
+    try {
+      await announcementsService.delete(id);
+      setAllAnnouncements(prev => prev.filter(announcement => announcement.id !== id));
+    } catch (error) {
+      console.error('Error deleting announcement:', error);
+      throw error;
+    }
   };
 
-  const toggleAnnouncement = (id: string) => {
-    setAnnouncements(prev =>
-      prev.map(announcement =>
-        announcement.id === id
-          ? { 
-              ...announcement, 
-              isActive: !announcement.isActive,
-              updatedAt: new Date().toISOString() 
-            }
-          : announcement
-      )
+  const toggleAnnouncement = async (id: string) => {
+    const announcement = allAnnouncements.find(a => a.id === id);
+    if (!announcement) return;
+
+    try {
+      await updateAnnouncement(id, { isActive: !announcement.isActive });
+    } catch (error) {
+      console.error('Error toggling announcement:', error);
+      throw error;
+    }
+  };
+
+  // Filter active announcements for display
+  const activeAnnouncements = allAnnouncements.filter(a => a.isActive);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-600">Cargando...</div>
+      </div>
     );
-  };
+  }
 
   return (
     <AppContext.Provider
@@ -149,7 +158,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addGridItem,
         updateGridItem,
         deleteGridItem,
-        announcements: announcements.filter(a => a.isActive),
+        announcements: activeAnnouncements,
+        allAnnouncements,
         addAnnouncement,
         updateAnnouncement,
         deleteAnnouncement,
