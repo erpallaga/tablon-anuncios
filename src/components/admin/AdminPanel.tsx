@@ -15,7 +15,6 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
     addAnnouncement,
     updateAnnouncement,
     deleteAnnouncement,
-    toggleAnnouncement,
   } = useAppContext();
 
   const [activeTab, setActiveTab] = useState<'grid' | 'announcements'>('grid');
@@ -78,7 +77,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
 
   // Función para mover un anuncio hacia arriba o abajo
   const moveAnnouncement = async (id: string, direction: 'up' | 'down') => {
-    const sortedAnnouncements = [...announcements].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const sortedAnnouncements = [...allAnnouncements].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     const currentIndex = sortedAnnouncements.findIndex(announcement => announcement.id === id);
     
     if (currentIndex === -1) return;

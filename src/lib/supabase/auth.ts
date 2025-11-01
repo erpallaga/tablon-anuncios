@@ -3,8 +3,6 @@
  * This checks against a master password stored in Supabase (via a simple table or config)
  */
 
-const MASTER_PASSWORD_KEY = 'master_password';
-
 export const authService = {
   /**
    * Verify master password
