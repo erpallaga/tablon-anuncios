@@ -83,28 +83,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // Funciones para manejar los anuncios
-  const addAnnouncement = (announcement: Omit<Announcement, 'id' | 'createdAt' | 'updatedAt' | 'isActive'>) => {
+  const addAnnouncement = (announcement: Omit<Announcement, 'id' | 'createdAt' | 'updatedAt' | 'isActive' | 'order'>) => {
     const now = new Date().toISOString();
-    setAnnouncements(prev => [
-      ...prev,
-      {
-        ...announcement,
-        id: uuidv4(),
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      },
-    ]);
+    setAnnouncements(prev => {
+      const newOrder = prev.length > 0 ? Math.max(...prev.map(a => a.order || 0)) + 1 : 0;
+      return [
+        ...prev,
+        {
+          ...announcement,
+          id: uuidv4(),
+          isActive: true,
+          order: newOrder,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ];
+    });
   };
 
-  const updateAnnouncement = (id: string, updates: Partial<Announcement>) => {
-    setAnnouncements(prev =>
-      prev.map(announcement =>
+  const updateAnnouncement = (id: string, updates: Partial<Omit<Announcement, 'id' | 'createdAt' | 'updatedAt'>>) => {
+    setAnnouncements(prev => {
+      const updated = prev.map(announcement =>
         announcement.id === id 
-          ? { ...announcement, ...updates, updatedAt: new Date().toISOString() } 
+          ? { 
+              ...announcement, 
+              ...updates, 
+              updatedAt: new Date().toISOString() 
+            } 
           : announcement
-      )
-    );
+      );
+      
+      // Si se actualizó el orden, reordenar la lista
+      if (updates.order !== undefined) {
+        return [...updated].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      }
+      
+      return updated;
+    });
   };
 
   const deleteAnnouncement = (id: string) => {
