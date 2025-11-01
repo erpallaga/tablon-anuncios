@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut, RotateCw, Maximize2, Minimize2 } from 'lucide-react';
-import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 
 // Configurar worker de PDF.js con mayor resolución
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -86,10 +85,53 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
   const goToPrevPage = () => setPageNumber(prev => Math.max(prev - 1, 1));
   const goToNextPage = () => setPageNumber(prev => Math.min(prev + 1, numPages));
 
-  // Controles de zoom
-  const zoomIn = () => setScale(prev => Math.min(prev + 0.2, 3));
-  const zoomOut = () => setScale(prev => Math.max(prev - 0.2, 0.5));
+  // Controles de zoom con pasos más pequeños
+  const ZOOM_STEP = 0.1; // Reducido de 0.2 a 0.1 para mayor precisión
+  const ZOOM_MIN = 0.5;
+  const ZOOM_MAX = 3;
+  const ZOOM_SENSITIVITY = 0.005; // Controla la sensibilidad del zoom con rueda
+  
+  const zoomIn = () => setScale(prev => {
+    const newScale = Math.min(prev + ZOOM_STEP, ZOOM_MAX);
+    return parseFloat(newScale.toFixed(2));
+  });
+  
+  const zoomOut = () => setScale(prev => {
+    const newScale = Math.max(prev - ZOOM_STEP, ZOOM_MIN);
+    return parseFloat(newScale.toFixed(2));
+  });
+  
   const resetZoom = () => setScale(1);
+  
+  // Manejar rueda del ratón para hacer zoom con mayor suavidad
+  const zoomRef = useRef<number>(1);
+  const [isZooming, setIsZooming] = useState(false);
+  
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey) {
+      e.preventDefault();
+      
+      // Usar requestAnimationFrame para suavizar la animación
+      if (!isZooming) {
+        setIsZooming(true);
+        
+        // Calcular el nuevo zoom basado en la dirección del scroll
+        const delta = -e.deltaY * ZOOM_SENSITIVITY;
+        zoomRef.current = Math.min(Math.max(zoomRef.current + delta, ZOOM_MIN), ZOOM_MAX);
+        
+        // Actualizar el estado con el nuevo zoom
+        setScale(prev => {
+          const newScale = Math.min(Math.max(prev + delta, ZOOM_MIN), ZOOM_MAX);
+          return parseFloat(newScale.toFixed(2));
+        });
+        
+        // Permitir el siguiente evento de zoom
+        requestAnimationFrame(() => {
+          setIsZooming(false);
+        });
+      }
+    }
+  };
   const rotate = () => setRotation(prev => (prev + 90) % 360);
   
   // Pantalla completa
@@ -186,7 +228,8 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
         {/* Contenido del PDF */}
         <div 
           ref={containerRef} 
-          className="flex-1 overflow-hidden bg-gray-100 relative"
+          className="flex-1 overflow-auto bg-gray-100 relative"
+          onWheel={handleWheel}
         >
           {error ? (
             <div className="absolute inset-0 flex items-center justify-center p-4 text-center">
@@ -198,53 +241,35 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
               </div>
             </div>
           ) : (
-            <TransformWrapper
-              initialScale={1}
-              minScale={0.5}
-              maxScale={3}
-              wheel={{ step: 0.1, smoothStep: 0.01 }}
-              doubleClick={{ disabled: true }}
-              centerOnInit={true}
-              centerZoomedOut={true}
-              disablePadding={true}
-              limitToBounds={false}
-              velocityAnimation={{ disabled: true }}
-            >
-              {({ zoomIn, zoomOut, resetTransform, zoomToElement }) => (
-                <div className="w-full h-full">
-                  <TransformComponent 
-                    wrapperClass="w-full h-full" 
-                    contentClass="flex items-center justify-center min-h-full"
-                  >
-                    <Document
-                      file={pdfUrl}
-                      onLoadSuccess={onDocumentLoadSuccess}
-                      onLoadError={onDocumentLoadError}
-                      loading={
-                        <div className="text-gray-600">
-                          Cargando documento...
-                        </div>
-                      }
-                    >
-                      <Page
-                        pageNumber={pageNumber}
-                        renderTextLayer={false}
-                        renderAnnotationLayer={false}
-                        scale={scale * window.devicePixelRatio}
-                        width={getPageWidth()}
-                        rotate={rotation}
-                        className="shadow-lg"
-                        loading={
-                          <div className="text-gray-600">
-                            Cargando página...
-                          </div>
-                        }
-                      />
-                    </Document>
-                  </TransformComponent>
-                </div>
-              )}
-            </TransformWrapper>
+            <div className="w-full h-full overflow-auto">
+              <div className="flex items-center justify-center min-h-full p-4">
+                <Document
+                  file={pdfUrl}
+                  onLoadSuccess={onDocumentLoadSuccess}
+                  onLoadError={onDocumentLoadError}
+                  loading={
+                    <div className="text-gray-600">
+                      Cargando documento...
+                    </div>
+                  }
+                >
+                  <Page
+                    pageNumber={pageNumber}
+                    renderTextLayer={false}
+                    renderAnnotationLayer={false}
+                    scale={scale}
+                    width={getPageWidth()}
+                    rotate={rotation}
+                    className="shadow-lg transition-transform duration-200"
+                    loading={
+                      <div className="text-gray-600">
+                        Cargando página...
+                      </div>
+                    }
+                  />
+                </Document>
+              </div>
+            </div>
           )}
         </div>
 
