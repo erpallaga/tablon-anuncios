@@ -37,19 +37,21 @@ function App() {
         {/* Mostrar anuncios activos */}
         {announcements.length > 0 && (
           <div className="mb-4 space-y-3">
-            {announcements.map(announcement => (
-              <div 
-                key={announcement.id} 
-                className="bg-white p-4 rounded-lg shadow-md border-l-4 border-blue-500"
-              >
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  {announcement.title}
-                </h3>
-                <p className="text-gray-700 whitespace-pre-line">
-                  {announcement.content}
-                </p>
-              </div>
-            ))}
+            {[...announcements]
+              .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+              .map(announcement => (
+                <div 
+                  key={announcement.id} 
+                  className="bg-white p-4 rounded-lg shadow-md border-l-4 border-blue-500"
+                >
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    {announcement.title}
+                  </h3>
+                  <p className="text-gray-700 whitespace-pre-line">
+                    {announcement.content}
+                  </p>
+                </div>
+              ))}
           </div>
         )}
 
