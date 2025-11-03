@@ -10,7 +10,22 @@ interface GridItemFormProps {
   isNew?: boolean;
 }
 
-const EMOJIS = ['📖', '🎤', '🧹', '📅', '💼', '📋', '👥', '📝', '📌', '🔔', '📢', '📑'];
+const EMOJIS = [
+  // Documents
+  '📄', '📑', '📃', '📜', '📋', '📇', '📁', '📂', '📝',
+  // Books & Notes
+  '📕', '📗', '📒', '📚', '📖', '🔖', '📰', '📓',
+  // Office
+  '💼', '🗂️', '📆', '🖇️',
+  // Communication
+  '📢', '📣', '📮',
+  // Objects
+  '🔍', '📌', '📍',
+  // People
+  '👥', '👨‍💼',
+  // Symbols
+  '⭐', '✨', '💡', '🔔', '🎯'
+];
 
 export default function GridItemForm({ item, onSave, onCancel, isNew = false }: GridItemFormProps) {
   const [formData, setFormData] = useState<Omit<GridItem, 'id' | 'order'>>(
@@ -18,7 +33,7 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
   );
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [useFileUpload, setUseFileUpload] = useState(false);
+  const [useFileUpload, setUseFileUpload] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -108,18 +123,21 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Icono
             </label>
-            <div className="grid grid-cols-6 gap-2">
+            <div className="grid grid-cols-8 gap-1">
               {EMOJIS.map(emoji => (
                 <button
                   key={emoji}
                   type="button"
-                  className={`text-2xl p-2 rounded-md ${
-                    formData.icon === emoji ? 'bg-blue-100' : 'hover:bg-gray-100'
+                  className={`text-2xl p-1 rounded-md transition-colors ${
+                    formData.icon === emoji 
+                      ? 'bg-blue-100 ring-2 ring-blue-400' 
+                      : 'hover:bg-gray-100'
                   }`}
                   onClick={() => setFormData(prev => ({ ...prev, icon: emoji }))}
+                  title={`Seleccionar ${emoji}`}
                 >
                   {emoji}
                 </button>
@@ -132,20 +150,20 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <input
                   type="radio"
-                  checked={!useFileUpload}
-                  onChange={() => setUseFileUpload(false)}
-                  className="text-blue-600"
-                />
-                URL del PDF
-              </label>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <input
-                  type="radio"
                   checked={useFileUpload}
                   onChange={() => setUseFileUpload(true)}
                   className="text-blue-600"
                 />
                 Subir archivo PDF
+              </label>
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <input
+                  type="radio"
+                  checked={!useFileUpload}
+                  onChange={() => setUseFileUpload(false)}
+                  className="text-blue-600"
+                />
+                URL del PDF
               </label>
             </div>
 
