@@ -5,6 +5,10 @@ import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut, RotateCw, Maximize2, Min
 // Configurar worker de PDF.js con mayor resolución
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
+// Aumentar la resolución para dispositivos móviles
+const DPI = window.devicePixelRatio * 96; // Ajustar según la densidad de píxeles del dispositivo
+const PRINT_RESOLUTION = 150; // Aumentar la resolución base
+
 interface PDFViewerProps {
   pdfUrl: string;
   title: string;
@@ -145,16 +149,23 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
     }
   };
 
-  // Calcular el ancho de la página con zoom
+  // Calcular el ancho de la página con zoom y DPI mejorado
   const getPageWidth = () => {
     if (containerWidth === 0) return undefined;
     const maxWidth = isFullscreen ? 1600 : 1200;
-    return Math.min(containerWidth * scale, maxWidth);
+    const baseWidth = Math.min(containerWidth * scale, maxWidth);
+    
+    // Aplicar factor de escala basado en DPI para dispositivos móviles
+    const isMobile = window.innerWidth <= 768;
+    const dpiScale = isMobile ? DPI / 96 : 1; // Aumentar escala en móviles
+    
+    return baseWidth * dpiScale;
   };
+
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-0 sm:p-4">
-      <div className={`bg-white ${isFullscreen ? 'rounded-none' : 'rounded-lg'} shadow-2xl w-full h-full sm:max-w-[95vw] sm:max-h-[95vh] flex flex-col transition-all duration-300`}>
+      <div className={`bg-white ${isFullscreen ? 'rounded-none' : 'rounded-lg'} shadow-2xl w-full h-full sm:max-w-[95vw] sm:max-h-[95vh] flex flex-col transition-all duration-300 overflow-hidden`}>
         {/* Header */}
         <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200 bg-white sticky top-0 z-10">
           <div className="flex items-center gap-3 overflow-hidden">
@@ -228,7 +239,7 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
         {/* Contenido del PDF */}
         <div 
           ref={containerRef} 
-          className="flex-1 overflow-auto bg-gray-100 relative"
+          className="flex-1 overflow-auto bg-gray-100 relative flex items-center justify-center"
           onWheel={handleWheel}
         >
           {error ? (
@@ -241,8 +252,8 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
               </div>
             </div>
           ) : (
-            <div className="w-full h-full overflow-auto">
-              <div className="flex items-center justify-center min-h-full p-4">
+            <div className="w-full h-full overflow-auto flex items-center justify-center">
+              <div className="p-4">
                 <Document
                   file={pdfUrl}
                   onLoadSuccess={onDocumentLoadSuccess}
@@ -255,12 +266,23 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
                 >
                   <Page
                     pageNumber={pageNumber}
-                    renderTextLayer={false}
-                    renderAnnotationLayer={false}
-                    scale={scale}
+                    scale={scale * (window.devicePixelRatio || 1)}
                     width={getPageWidth()}
                     rotate={rotation}
-                    className="shadow-lg transition-transform duration-200"
+                    className="shadow-lg transition-transform duration-200 mx-auto"
+                    renderMode="canvas"
+                    renderTextLayer={false}
+                    renderAnnotationLayer={false}
+                    loading=""
+                    onRenderSuccess={(page) => {
+                      // Mejorar la calidad de renderizado
+                      const viewport = page.getViewport({ scale: scale * (window.devicePixelRatio || 1) });
+                      const canvas = document.querySelector('.react-pdf__Page__canvas') as HTMLCanvasElement | null;
+                      if (canvas) {
+                        canvas.style.width = `${Math.floor(viewport.width)}px`;
+                        canvas.style.height = `${Math.floor(viewport.height)}px`;
+                      }
+                    }}
                     loading={
                       <div className="text-gray-600">
                         Cargando página...
