@@ -5,6 +5,19 @@ import GridItemForm from './GridItemForm';
 import AnnouncementForm from './AnnouncementForm';
 import type { GridItem, Announcement } from '../../types';
 
+// Helper function to extract filename from URL
+const getFilenameFromUrl = (url: string): string => {
+  try {
+    const urlObj = new URL(url);
+    const pathname = urlObj.pathname;
+    return pathname.split('/').pop() || url; // Return last part of path or original URL if parsing fails
+  } catch (e) {
+    // If URL parsing fails, try to extract the last part after the last slash
+    const parts = url.split('/');
+    return parts[parts.length - 1] || url;
+  }
+};
+
 export default function AdminPanel({ onClose }: { onClose: () => void }) {
   const {
     gridItems,
@@ -258,7 +271,9 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
                           <span className="text-2xl mr-3">{item.icon}</span>
                           <div>
                             <p className="text-sm font-medium text-gray-900">{item.title}</p>
-                            <p className="text-sm text-gray-500 truncate max-w-xs">{item.pdfUrl}</p>
+                            <p className="text-sm text-gray-500 truncate max-w-xs">
+                              {getFilenameFromUrl(item.pdfUrl)}
+                            </p>
                           </div>
                         </div>
                         <div className="flex items-center space-x-2">
