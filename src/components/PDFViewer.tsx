@@ -7,7 +7,6 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/b
 
 // Aumentar la resolución para dispositivos móviles
 const DPI = window.devicePixelRatio * 96; // Ajustar según la densidad de píxeles del dispositivo
-const PRINT_RESOLUTION = 150; // Aumentar la resolución base
 
 interface PDFViewerProps {
   pdfUrl: string;
@@ -273,7 +272,11 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
                     renderMode="canvas"
                     renderTextLayer={false}
                     renderAnnotationLayer={false}
-                    loading=""
+                    loading={
+                      <div className="text-gray-600">
+                        Cargando página...
+                      </div>
+                    }
                     onRenderSuccess={(page) => {
                       // Mejorar la calidad de renderizado
                       const viewport = page.getViewport({ scale: scale * (window.devicePixelRatio || 1) });
@@ -283,11 +286,6 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
                         canvas.style.height = `${Math.floor(viewport.height)}px`;
                       }
                     }}
-                    loading={
-                      <div className="text-gray-600">
-                        Cargando página...
-                      </div>
-                    }
                   />
                 </Document>
               </div>
