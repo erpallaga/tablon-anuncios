@@ -3,8 +3,6 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut, RotateCw, Maximize2, Minimize2 } from 'lucide-react';
 
 // Configurar worker de PDF.js con mayor resolución
-const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-
 // Usar el worker estándar para todos los navegadores
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -23,7 +21,8 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [error, setError] = useState<string>('');
   const [scale, setScale] = useState<number>(1);
-  const [rotation, setRotation] = useState<number>(0);
+  // Rotación fija en 0 grados por ahora
+  const rotation = 0;
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
@@ -63,7 +62,7 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
         resetZoom();
       } else if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
-        rotate();
+        // Rotación deshabilitada temporalmente
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
         goToPrevPage();
@@ -138,7 +137,8 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
       }
     }
   };
-  const rotate = () => setRotation(prev => (prev + 90) % 360);
+  // La rotación está deshabilitada temporalmente para simplificar
+  // const rotate = () => setRotation(prev => (prev + 90) % 360);
   
   // Pantalla completa
   const toggleFullscreen = () => {
@@ -218,12 +218,11 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
 
             {/* Botón de rotación */}
             <button
-              onClick={rotate}
-              className="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-150 hidden sm:block"
-              aria-label="Rotar"
-              title="Rotar (R)"
+              className="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-150 hidden sm:block opacity-50 cursor-not-allowed"
+              aria-label="Rotar (deshabilitado)"
+              title="Rotación deshabilitada temporalmente"
             >
-              <RotateCw className="w-5 h-5 text-gray-700" />
+              <RotateCw className="w-5 h-5 text-gray-400" />
             </button>
 
             {/* Botón de pantalla completa */}
@@ -287,32 +286,22 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
                 >
                   <Page
                     pageNumber={pageNumber}
-                    scale={scale * (window.devicePixelRatio || 1)}
                     width={getPageWidth()}
+                    scale={scale * (window.devicePixelRatio || 1)}
                     rotate={rotation}
                     className="shadow-lg transition-transform duration-200 my-0 max-w-full h-auto block"
-                    renderMode="canvas"
-                    renderTextLayer={false}
-                    renderAnnotationLayer={false}
-                    // Asegurar compatibilidad con iOS
-                    onLoadError={(error) => {
-                      console.error('Error al cargar el PDF:', error);
-                      setError('No se pudo cargar el documento. Por favor, inténtalo de nuevo.');
-                    }}
-                    onRenderError={(error) => {
-                      console.error('Error al renderizar el PDF:', error);
-                      setError('Error al mostrar el documento. Por favor, inténtalo de nuevo.');
-                    }}
-                    // Mejorar rendimiento en iOS
-                    renderTextLayer={false}
-                    renderAnnotationLayer={false}
-                    renderMode="canvas"
-                    className="pdf-page shadow-lg transition-transform duration-200 my-0 max-w-full h-auto block"
                     loading={
                       <div className="text-gray-600">
                         Cargando página...
                       </div>
                     }
+                    renderMode="canvas"
+                    renderTextLayer={false}
+                    renderAnnotationLayer={false}
+                    onRenderError={(error) => {
+                      console.error('Error al renderizar el PDF:', error);
+                      setError('Error al mostrar el documento. Por favor, inténtalo de nuevo.');
+                    }}
                     onRenderSuccess={(page) => {
                       // Mejorar la calidad de renderizado
                       const viewport = page.getViewport({ scale: scale * (window.devicePixelRatio || 1) });
