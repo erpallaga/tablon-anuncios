@@ -271,7 +271,6 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
     // Aplicar factor de escala basado en DPI para dispositivos móviles
     const isMobile = window.innerWidth <= 768;
     const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-    const isAndroid = /Android/.test(navigator.userAgent);
     
     // Set initial scale for mobile devices
     let dpiScale = 1;
