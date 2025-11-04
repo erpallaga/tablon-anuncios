@@ -3,6 +3,9 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut, RotateCw, Maximize2, Minimize2 } from 'lucide-react';
 
 // Configurar worker de PDF.js con mayor resolución
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+
+// Usar el worker estándar para todos los navegadores
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 // Aumentar la resolución para dispositivos móviles
@@ -152,18 +155,32 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
   const getPageWidth = () => {
     if (containerWidth === 0) return undefined;
     const maxWidth = isFullscreen ? 1600 : 1200;
-    const baseWidth = Math.min(containerWidth * scale, maxWidth);
+    // Restar el padding (4 = 1rem = 16px * 2 = 32px) para evitar desbordamiento horizontal
+    const containerWidthWithPadding = containerWidth - 32;
+    const baseWidth = Math.min(containerWidthWithPadding * scale, maxWidth);
     
     // Aplicar factor de escala basado en DPI para dispositivos móviles
     const isMobile = window.innerWidth <= 768;
-    const dpiScale = isMobile ? DPI / 96 : 1; // Aumentar escala en móviles
+    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    
+    // Ajustar escala para móviles
+    let dpiScale = 1;
+    if (isMobile) {
+      if (isIOSDevice) {
+        // Escala reducida para iOS
+        dpiScale = Math.min(window.devicePixelRatio || 1, 1.5);
+      } else {
+        // Escala estándar para otros móviles
+        dpiScale = DPI / 96;
+      }
+    }
     
     return baseWidth * dpiScale;
   };
 
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-0 sm:p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-0 sm:p-4 touch-none">
       <div className={`bg-white ${isFullscreen ? 'rounded-none' : 'rounded-lg'} shadow-2xl w-full h-full sm:max-w-[95vw] sm:max-h-[95vh] flex flex-col transition-all duration-300 overflow-hidden`}>
         {/* Header */}
         <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200 bg-white sticky top-0 z-10">
@@ -238,8 +255,13 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
         {/* Contenido del PDF */}
         <div 
           ref={containerRef} 
-          className="flex-1 overflow-auto bg-gray-100 relative flex items-center justify-center"
+          className="flex-1 overflow-auto bg-gray-100 relative webkit-overflow-scrolling-touch"
           onWheel={handleWheel}
+          style={{
+            WebkitOverflowScrolling: 'touch', // Mejorar el desplazamiento en iOS
+            overscrollBehavior: 'contain', // Prevenir el rebote excesivo en iOS
+            WebkitTapHighlightColor: 'transparent' // Eliminar el resaltado al tocar en iOS
+          }}
         >
           {error ? (
             <div className="absolute inset-0 flex items-center justify-center p-4 text-center">
@@ -251,8 +273,8 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
               </div>
             </div>
           ) : (
-            <div className="w-full h-full overflow-auto flex items-center justify-center">
-              <div className="p-4">
+            <div className="w-full min-h-full flex flex-col items-center py-4">
+              <div className="w-full max-w-full px-2 flex justify-center">
                 <Document
                   file={pdfUrl}
                   onLoadSuccess={onDocumentLoadSuccess}
@@ -268,10 +290,24 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
                     scale={scale * (window.devicePixelRatio || 1)}
                     width={getPageWidth()}
                     rotate={rotation}
-                    className="shadow-lg transition-transform duration-200 mx-auto"
+                    className="shadow-lg transition-transform duration-200 my-0 max-w-full h-auto block"
                     renderMode="canvas"
                     renderTextLayer={false}
                     renderAnnotationLayer={false}
+                    // Asegurar compatibilidad con iOS
+                    onLoadError={(error) => {
+                      console.error('Error al cargar el PDF:', error);
+                      setError('No se pudo cargar el documento. Por favor, inténtalo de nuevo.');
+                    }}
+                    onRenderError={(error) => {
+                      console.error('Error al renderizar el PDF:', error);
+                      setError('Error al mostrar el documento. Por favor, inténtalo de nuevo.');
+                    }}
+                    // Mejorar rendimiento en iOS
+                    renderTextLayer={false}
+                    renderAnnotationLayer={false}
+                    renderMode="canvas"
+                    className="pdf-page shadow-lg transition-transform duration-200 my-0 max-w-full h-auto block"
                     loading={
                       <div className="text-gray-600">
                         Cargando página...
