@@ -167,34 +167,51 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
     }
   };
 
-  // Handle touch events for pinch-to-zoom
-  const touchStartRef = useRef<{ x1: number; y1: number; x2: number; y2: number; distance: number } | null>(null);
-  const lastScaleRef = useRef(1);
+  // Enhanced touch handling for pinch-to-zoom
+  const touchStartRef = useRef<{
+    x1: number; y1: number; x2: number; y2: number; 
+    distance: number;
+    lastScale: number;
+    lastX: number;
+    lastY: number;
+    isScrolling: boolean;
+  } | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
-      e.preventDefault();
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
       const distance = Math.hypot(
         touch2.pageX - touch1.pageX,
         touch2.pageY - touch1.pageY
       );
+      
       touchStartRef.current = {
         x1: touch1.pageX,
         y1: touch1.pageY,
         x2: touch2.pageX,
         y2: touch2.pageY,
-        distance
+        distance,
+        lastScale: scale,
+        lastX: (touch1.pageX + touch2.pageX) / 2,
+        lastY: (touch1.pageY + touch2.pageY) / 2,
+        isScrolling: false
       };
-      lastScaleRef.current = scale;
+    } else if (e.touches.length === 1) {
+      // Single touch - allow scrolling
+      touchStartRef.current = {
+        ...(touchStartRef.current || {}),
+        isScrolling: true
+      };
     }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length === 2 && touchStartRef.current) {
+    if (!touchStartRef.current) return;
+    
+    // Two-finger pinch to zoom
+    if (e.touches.length === 2) {
       e.preventDefault();
-      e.stopPropagation();
       
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
@@ -204,11 +221,20 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
       );
       
       if (touchStartRef.current.distance > 0) {
-        const scaleFactor = currentDistance / touchStartRef.current.distance;
-        const newScale = lastScaleRef.current * scaleFactor;
+        // More sensitive zoom calculation
+        const scaleFactor = Math.pow(currentDistance / touchStartRef.current.distance, 1.5);
+        const newScale = touchStartRef.current.lastScale * scaleFactor;
         setScale(Math.min(Math.max(newScale, ZOOM_MIN), ZOOM_MAX));
       }
+      
+      // Update touch positions for next move
+      touchStartRef.current.x1 = touch1.pageX;
+      touchStartRef.current.y1 = touch1.pageY;
+      touchStartRef.current.x2 = touch2.pageX;
+      touchStartRef.current.y2 = touch2.pageY;
+      touchStartRef.current.distance = currentDistance;
     }
+    // Single finger scroll - handled by browser
   };
 
   const handleTouchEnd = () => {
@@ -240,6 +266,10 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
     // Aplicar factor de escala basado en DPI para dispositivos móviles
     const isMobile = window.innerWidth <= 768;
     const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    const isAndroid = /Android/.test(navigator.userAgent);
+    
+    // Initial scale for mobile devices - reduced for better initial view
+    const initialScale = isIOSDevice || isAndroid ? 0.6 : 1;
     
     // Ajustar escala para móviles
     let dpiScale = 1;
@@ -332,11 +362,15 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
         {/* Contenido del PDF */}
         <div 
           ref={containerRef} 
-          className="flex-1 overflow-auto bg-gray-100 relative touch-none"
+          className="flex-1 overflow-auto bg-gray-100 relative touch-auto"
           onWheel={handleWheel as any}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
+          style={{
+            WebkitOverflowScrolling: 'touch', // Smooth scrolling on iOS
+            touchAction: 'pan-y pan-x pinch-zoom' // Enable native scrolling and zooming
+          }}
         >
           {error ? (
             <div className="absolute inset-0 flex items-center justify-center p-4 text-center">
