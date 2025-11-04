@@ -76,6 +76,34 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isFullscreen]);
 
+  useEffect(() => {
+    const preventDefault = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+
+    const preventZoom = (e: WheelEvent) => {
+      // Only prevent default for wheel events that we handle (pinch/zoom)
+      if (e.ctrlKey || e.metaKey || Math.abs(e.deltaY) < 1) {
+        e.preventDefault();
+      }
+    };
+
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener('touchmove', preventDefault, { passive: false });
+      container.addEventListener('wheel', preventZoom, { passive: false });
+    }
+    
+    return () => {
+      if (container) {
+        container.removeEventListener('touchmove', preventDefault);
+        container.removeEventListener('wheel', preventZoom);
+      }
+    };
+  }, []);
+
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
     setError('');
@@ -108,35 +136,85 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
   
   const resetZoom = () => setScale(1);
   
-  // Manejar rueda del ratón para hacer zoom con mayor suavidad
-  const zoomRef = useRef<number>(1);
-  const [isZooming, setIsZooming] = useState(false);
-  
-  const handleWheel = (e: React.WheelEvent) => {
-    if (e.ctrlKey) {
+  // Handle mouse wheel and trackpad pinch gestures for zooming
+  const handleWheel = (e: WheelEvent) => {
+    // Handle both ctrl+wheel and trackpad pinch gestures
+    if (e.ctrlKey || e.metaKey || Math.abs(e.deltaY) < 1) {
       e.preventDefault();
+      e.stopPropagation();
       
-      // Usar requestAnimationFrame para suavizar la animación
-      if (!isZooming) {
-        setIsZooming(true);
+      // For trackpad pinch, use the ctrlKey status to determine zoom direction
+      const isPinch = !e.ctrlKey && !e.metaKey && Math.abs(e.deltaY) < 1 && e.deltaMode === 0;
+      
+      // Maximum sensitivity for trackpad pinch
+      const delta = isPinch 
+        ? -e.deltaY * 0.15  // Maximum sensitivity for trackpad
+        : -Math.sign(e.deltaY) * ZOOM_SENSITIVITY * 3;  // High sensitivity for mouse wheel
+      
+      setScale(prev => {
+        let newScale;
         
-        // Calcular el nuevo zoom basado en la dirección del scroll
-        const delta = -e.deltaY * ZOOM_SENSITIVITY;
-        zoomRef.current = Math.min(Math.max(zoomRef.current + delta, ZOOM_MIN), ZOOM_MAX);
-        
-        // Actualizar el estado con el nuevo zoom
-        setScale(prev => {
-          const newScale = Math.min(Math.max(prev + delta, ZOOM_MIN), ZOOM_MAX);
-          return parseFloat(newScale.toFixed(2));
-        });
-        
-        // Permitir el siguiente evento de zoom
-        requestAnimationFrame(() => {
-          setIsZooming(false);
-        });
+        if (delta > 0) {
+          // Zoom in - maximum sensitivity
+          newScale = prev * (1 + delta * 0.8);
+        } else {
+          // Zoom out - maximum sensitivity
+          newScale = prev / (1 - delta * 0.8);
+        }
+          
+        return Math.min(Math.max(newScale, ZOOM_MIN), ZOOM_MAX);
+      });
+    }
+  };
+
+  // Handle touch events for pinch-to-zoom
+  const touchStartRef = useRef<{ x1: number; y1: number; x2: number; y2: number; distance: number } | null>(null);
+  const lastScaleRef = useRef(1);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const distance = Math.hypot(
+        touch2.pageX - touch1.pageX,
+        touch2.pageY - touch1.pageY
+      );
+      touchStartRef.current = {
+        x1: touch1.pageX,
+        y1: touch1.pageY,
+        x2: touch2.pageX,
+        y2: touch2.pageY,
+        distance
+      };
+      lastScaleRef.current = scale;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && touchStartRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const currentDistance = Math.hypot(
+        touch2.pageX - touch1.pageX,
+        touch2.pageY - touch1.pageY
+      );
+      
+      if (touchStartRef.current.distance > 0) {
+        const scaleFactor = currentDistance / touchStartRef.current.distance;
+        const newScale = lastScaleRef.current * scaleFactor;
+        setScale(Math.min(Math.max(newScale, ZOOM_MIN), ZOOM_MAX));
       }
     }
   };
+
+  const handleTouchEnd = () => {
+    touchStartRef.current = null;
+  };
+
   // La rotación está deshabilitada temporalmente para simplificar
   // const rotate = () => setRotation(prev => (prev + 90) % 360);
   
@@ -254,13 +332,11 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
         {/* Contenido del PDF */}
         <div 
           ref={containerRef} 
-          className="flex-1 overflow-auto bg-gray-100 relative webkit-overflow-scrolling-touch"
-          onWheel={handleWheel}
-          style={{
-            WebkitOverflowScrolling: 'touch', // Mejorar el desplazamiento en iOS
-            overscrollBehavior: 'contain', // Prevenir el rebote excesivo en iOS
-            WebkitTapHighlightColor: 'transparent' // Eliminar el resaltado al tocar en iOS
-          }}
+          className="flex-1 overflow-auto bg-gray-100 relative touch-none"
+          onWheel={handleWheel as any}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         >
           {error ? (
             <div className="absolute inset-0 flex items-center justify-center p-4 text-center">
