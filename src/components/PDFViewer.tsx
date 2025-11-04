@@ -6,8 +6,7 @@ import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut, RotateCw, Maximize2, Min
 // Usar el worker estándar para todos los navegadores
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
-// Aumentar la resolución para dispositivos móviles
-const DPI = window.devicePixelRatio * 96; // Ajustar según la densidad de píxeles del dispositivo
+// Removed unused DPI constant
 
 interface PDFViewerProps {
   pdfUrl: string;
