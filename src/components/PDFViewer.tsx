@@ -167,17 +167,30 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
     }
   };
 
-  // Enhanced touch handling for pinch-to-zoom
-  const touchStartRef = useRef<{
-    x1: number; y1: number; x2: number; y2: number; 
+  // Enhanced touch handling for pinch-to-zoom and smooth scrolling
+  interface TouchState {
+    x1: number; y1: number; x2: number; y2: number;
     distance: number;
     lastScale: number;
     lastX: number;
     lastY: number;
-    isScrolling: boolean;
-  } | null>(null);
+    touchStartTime: number;
+  }
+  
+  const touchStartRef = useRef<TouchState | null>(null);
+
+  const isScrollingRef = useRef(false);
+  const lastTouchTimeRef = useRef(0);
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    const now = Date.now();
+    
+    // Prevent rapid double-tap zoom on iOS
+    if (now - lastTouchTimeRef.current < 300) {
+      e.preventDefault();
+    }
+    lastTouchTimeRef.current = now;
+
     if (e.touches.length === 2) {
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
@@ -195,19 +208,24 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
         lastScale: scale,
         lastX: (touch1.pageX + touch2.pageX) / 2,
         lastY: (touch1.pageY + touch2.pageY) / 2,
-        isScrolling: false
+        touchStartTime: now
       };
+      
+      // Prevent scrolling when zooming
+      isScrollingRef.current = false;
     } else if (e.touches.length === 1) {
       // Single touch - allow scrolling
-      // Reset touch state with default values for required properties
       touchStartRef.current = {
-        x1: 0, y1: 0, x2: 0, y2: 0,
+        x1: e.touches[0].pageX,
+        y1: e.touches[0].pageY,
+        x2: 0, y2: 0,
         distance: 0,
         lastScale: scale,
-        lastX: 0,
-        lastY: 0,
-        isScrolling: true
+        lastX: e.touches[0].pageX,
+        lastY: e.touches[0].pageY,
+        touchStartTime: now
       };
+      isScrollingRef.current = true;
     }
   };
 
@@ -226,10 +244,15 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
       );
       
       if (touchStartRef.current.distance > 0) {
-        // More sensitive zoom calculation
-        const scaleFactor = Math.pow(currentDistance / touchStartRef.current.distance, 1.5);
+        // More sensitive and fluid zoom calculation
+        const scaleFactor = Math.pow(currentDistance / touchStartRef.current.distance, 2);
         const newScale = touchStartRef.current.lastScale * scaleFactor;
-        setScale(Math.min(Math.max(newScale, ZOOM_MIN), ZOOM_MAX));
+        
+        // Apply easing for smoother zoom
+        const clampedScale = Math.min(Math.max(newScale, ZOOM_MIN), ZOOM_MAX);
+        const easedScale = touchStartRef.current.lastScale + (clampedScale - touchStartRef.current.lastScale) * 0.3;
+        
+        setScale(easedScale);
       }
       
       // Update touch positions for next move
@@ -238,12 +261,18 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
       touchStartRef.current.x2 = touch2.pageX;
       touchStartRef.current.y2 = touch2.pageY;
       touchStartRef.current.distance = currentDistance;
+      
+    } else if (e.touches.length === 1 && isScrollingRef.current) {
+      // Single finger scroll - allow default behavior for better scrolling
+      return;
+    } else {
+      e.preventDefault();
     }
-    // Single finger scroll - handled by browser
   };
 
   const handleTouchEnd = () => {
     touchStartRef.current = null;
+    isScrollingRef.current = false;
   };
 
   // La rotación está deshabilitada temporalmente para simplificar
@@ -268,20 +297,23 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
     const containerWidthWithPadding = containerWidth - 32;
     const baseWidth = Math.min(containerWidthWithPadding * scale, maxWidth);
     
-    // Aplicar factor de escala basado en DPI para dispositivos móviles
-    const isMobile = window.innerWidth <= 768;
-    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-    
+    // Mobile detection and scaling
+    const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+    const isIOSDevice = typeof navigator !== 'undefined' ? /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream : false;
+  
     // Set initial scale for mobile devices
     let dpiScale = 1;
-    if (isMobile) {
+    if (isMobile && typeof window !== 'undefined') {
+      const pixelRatio = window.devicePixelRatio || 1;
+      const viewportScale = Math.min(window.innerWidth / 428, 1);
+      
       if (isIOSDevice) {
-        // Reduced scale for iOS
-        dpiScale = Math.min((window.devicePixelRatio || 1) * 0.6, 1.5);
+        dpiScale = Math.min(pixelRatio * 0.5, 1.2) * viewportScale;
       } else {
-        // Standard scale for other mobile devices
-        dpiScale = (DPI / 96) * 0.6;
+        dpiScale = Math.min(pixelRatio * 0.6, 1.3) * viewportScale;
       }
+      
+      dpiScale = Math.max(dpiScale, 0.5);
     }
     
     return baseWidth * dpiScale;
@@ -362,15 +394,21 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
 
         {/* Contenido del PDF */}
         <div 
-          ref={containerRef} 
+          ref={containerRef}
           className="flex-1 overflow-auto bg-gray-100 relative touch-auto"
           onWheel={handleWheel as any}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
           style={{
-            WebkitOverflowScrolling: 'touch', // Smooth scrolling on iOS
-            touchAction: 'pan-y pan-x pinch-zoom' // Enable native scrolling and zooming
+            WebkitOverflowScrolling: 'touch' as any,
+            touchAction: 'manipulation',
+            WebkitTouchCallout: 'none' as any,
+            WebkitUserSelect: 'none' as any,
+            userSelect: 'none',
+            overflow: 'auto',
+            overscrollBehavior: 'contain'
           }}
         >
           {error ? (
