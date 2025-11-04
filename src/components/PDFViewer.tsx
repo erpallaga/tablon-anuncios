@@ -199,8 +199,13 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
       };
     } else if (e.touches.length === 1) {
       // Single touch - allow scrolling
+      // Reset touch state with default values for required properties
       touchStartRef.current = {
-        ...(touchStartRef.current || {}),
+        x1: 0, y1: 0, x2: 0, y2: 0,
+        distance: 0,
+        lastScale: scale,
+        lastX: 0,
+        lastY: 0,
         isScrolling: true
       };
     }
@@ -268,18 +273,15 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
     const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     const isAndroid = /Android/.test(navigator.userAgent);
     
-    // Initial scale for mobile devices - reduced for better initial view
-    const initialScale = isIOSDevice || isAndroid ? 0.6 : 1;
-    
-    // Ajustar escala para móviles
+    // Set initial scale for mobile devices
     let dpiScale = 1;
     if (isMobile) {
       if (isIOSDevice) {
-        // Escala reducida para iOS
-        dpiScale = Math.min(window.devicePixelRatio || 1, 1.5);
+        // Reduced scale for iOS
+        dpiScale = Math.min((window.devicePixelRatio || 1) * 0.6, 1.5);
       } else {
-        // Escala estándar para otros móviles
-        dpiScale = DPI / 96;
+        // Standard scale for other mobile devices
+        dpiScale = (DPI / 96) * 0.6;
       }
     }
     
