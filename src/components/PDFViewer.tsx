@@ -23,6 +23,98 @@ export default function PDFViewer({ pdfUrl, title, onClose, icon }: PDFViewerPro
   const [panStart, setPanStart] = useState<{ x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Advanced trackpad + pinch zoom with center-point focus
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let pinchStartScale = scale;
+    let lastDistance = 0;
+    let pinchMidpoint = { x: 0, y: 0 };
+    let animationFrame: number | null = null;
+
+    const getDistance = (touches: TouchList) =>
+      Math.hypot(
+        touches[0].pageX - touches[1].pageX,
+        touches[0].pageY - touches[1].pageY
+      );
+
+    const getMidpoint = (touches: TouchList) => ({
+      x: (touches[0].pageX + touches[1].pageX) / 2,
+      y: (touches[0].pageY + touches[1].pageY) / 2,
+    });
+
+    const applyZoom = (newScale: number, cx: number, cy: number) => {
+      const rect = container.getBoundingClientRect();
+      const prevScale = scale;
+      const scaleRatio = newScale / prevScale;
+
+      // Keep focus around cursor/touch midpoint
+      container.scrollLeft = (cx + container.scrollLeft - rect.left) * scaleRatio - (cx - rect.left);
+      container.scrollTop = (cy + container.scrollTop - rect.top) * scaleRatio - (cy - rect.top);
+      setScale(newScale);
+    };
+
+    // Trackpad zoom (desktop)
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        const delta = -e.deltaY * 0.002;
+        const newScale = Math.min(Math.max(scale + delta, 0.5), 4);
+        applyZoom(newScale, e.clientX, e.clientY);
+      }
+    };
+
+    // Touch pinch zoom (mobile)
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        pinchStartScale = scale;
+        lastDistance = getDistance(e.touches);
+        const rect = container.getBoundingClientRect();
+        const mid = getMidpoint(e.touches);
+        pinchMidpoint = { x: mid.x - rect.left, y: mid.y - rect.top };
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return;
+      e.preventDefault();
+      const dist = getDistance(e.touches);
+      if (!lastDistance) {
+        lastDistance = dist;
+        return;
+      }
+
+      const delta = dist / lastDistance;
+      const newScale = Math.min(Math.max(pinchStartScale * delta, 0.5), 4);
+
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(() => {
+        const rect = container.getBoundingClientRect();
+        applyZoom(newScale, pinchMidpoint.x + rect.left, pinchMidpoint.y + rect.top);
+      });
+    };
+
+    const handleTouchEnd = () => {
+      lastDistance = 0;
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    container.addEventListener("touchstart", handleTouchStart, { passive: false });
+    container.addEventListener("touchmove", handleTouchMove, { passive: false });
+    container.addEventListener("touchend", handleTouchEnd);
+
+    return () => {
+      container.removeEventListener("wheel", handleWheel);
+      container.removeEventListener("touchstart", handleTouchStart);
+      container.removeEventListener("touchmove", handleTouchMove);
+      container.removeEventListener("touchend", handleTouchEnd);
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+    };
+  }, [scale]);
+
   // Zoom controls
   const zoomIn = () => setScale(prev => Math.min(prev + 0.2, 4));
   const zoomOut = () => setScale(prev => Math.max(prev - 0.2, 0.5));
