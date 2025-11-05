@@ -1,176 +1,180 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/Page/TextLayer.css';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+
+// Set up PDF.js worker with version matching react-pdf's internal version
+const workerUrl = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 interface PDFViewerProps {
   pdfUrl: string;
   title: string;
   onClose: () => void;
-  icon?: string | React.ReactNode;
-  initialPage?: number;
-  totalPages?: number;
+  icon?: React.ReactNode;
 }
 
-export default function PDFViewer({ 
-  pdfUrl, 
-  title, 
-  onClose, 
-  icon, 
-  initialPage = 1, 
-  totalPages: externalTotalPages 
-}: PDFViewerProps) {
+export default function PDFViewer({ pdfUrl, title, onClose, icon }: PDFViewerProps) {
+  const [numPages, setNumPages] = useState<number>(0);
+  const [pageNumber, setPageNumber] = useState<number>(1);
   const [scale, setScale] = useState<number>(1);
-  const [pageNumber, setPageNumber] = useState<number>(initialPage);
-  const pdfContainerRef = useRef<HTMLDivElement>(null);
-  const hasPageCount = externalTotalPages !== undefined;
-  
-  // Zoom levels for better control
-  const ZOOM_LEVELS = [0.5, 0.75, 1, 1.5, 2, 3];
-  const [currentZoomIndex, setCurrentZoomIndex] = useState(ZOOM_LEVELS.indexOf(1));
-  
-  // Navigation callbacks with useCallback
-  const scrollToTop = useCallback(() => {
-    pdfContainerRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' });
-  }, []);
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState<{ x: number; y: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const goToPrevPage = useCallback(() => {
-    setPageNumber(prev => {
-      const newPage = Math.max(prev - 1, 1);
-      if (newPage !== prev) scrollToTop();
-      return newPage;
-    });
-  }, [scrollToTop]);
+  // Zoom controls
+  const zoomIn = () => setScale(prev => Math.min(prev + 0.2, 4));
+  const zoomOut = () => setScale(prev => Math.max(prev - 0.2, 0.5));
+  const resetZoom = () => setScale(1);
 
-  const goToNextPage = useCallback(() => {
-    setPageNumber(prev => {
-      if (hasPageCount && prev >= externalTotalPages!) return prev;
-      const newPage = prev + 1;
-      scrollToTop();
-      return newPage;
-    });
-  }, [hasPageCount, externalTotalPages, scrollToTop]);
-  
-  // Handle keyboard navigation and zoom
+  // Page navigation
+  const goToPrevPage = () => setPageNumber(prev => Math.max(prev - 1, 1));
+  const goToNextPage = () => setPageNumber(prev => Math.min(prev + 1, numPages));
+
+  // Document load handler
+  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
+    setNumPages(numPages);
+    setPageNumber(1);
+  };
+
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
       if (e.key === 'ArrowLeft') goToPrevPage();
       if (e.key === 'ArrowRight') goToNextPage();
-      if (e.key === '0' && e.ctrlKey) {
+      if ((e.ctrlKey && e.key === '=') || e.key === '+') {
         e.preventDefault();
-        resetZoom();
+        zoomIn();
+      }
+      if ((e.ctrlKey && e.key === '-') || e.key === '-') {
+        e.preventDefault();
+        zoomOut();
+      }
+      if (e.ctrlKey && e.key === '0') resetZoom();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [numPages, onClose]);
+
+  // Trackpad/pinch zoom
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let lastDistance = 0;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        const delta = -e.deltaY * 0.001;
+        setScale(prev => Math.min(Math.max(prev + delta, 0.5), 4));
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, goToPrevPage, goToNextPage, pageNumber, hasPageCount, externalTotalPages]);
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const [a, b] = e.touches;
+        const dist = Math.hypot(a.pageX - b.pageX, a.pageY - b.pageY);
+        if (lastDistance) {
+          const delta = (dist - lastDistance) / 200;
+          setScale(prev => Math.min(Math.max(prev + delta, 0.5), 4));
+        }
+        lastDistance = dist;
+      }
+    };
 
+    const resetDistance = () => (lastDistance = 0);
 
-  // Zoom controls with discrete levels
-  const zoomIn = () => {
-    setCurrentZoomIndex(prev => {
-      const newIndex = Math.min(prev + 1, ZOOM_LEVELS.length - 1);
-      setScale(ZOOM_LEVELS[newIndex]);
-      return newIndex;
-    });
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    container.addEventListener('touchmove', handleTouchMove, { passive: false });
+    container.addEventListener('touchend', resetDistance);
+
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('touchend', resetDistance);
+    };
+  }, []);
+
+  // Pan/drag functionality
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsPanning(true);
+    setPanStart({ x: e.clientX, y: e.clientY });
+    document.body.style.cursor = 'grabbing';
   };
 
-  const zoomOut = () => {
-    setCurrentZoomIndex(prev => {
-      const newIndex = Math.max(prev - 1, 0);
-      setScale(ZOOM_LEVELS[newIndex]);
-      return newIndex;
-    });
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isPanning || !panStart || !containerRef.current) return;
+    e.preventDefault();
+    const dx = e.clientX - panStart.x;
+    const dy = e.clientY - panStart.y;
+    containerRef.current.scrollLeft -= dx;
+    containerRef.current.scrollTop -= dy;
+    setPanStart({ x: e.clientX, y: e.clientY });
   };
 
-  const resetZoom = () => {
-    const defaultIndex = ZOOM_LEVELS.indexOf(1);
-    setCurrentZoomIndex(defaultIndex);
-    setScale(1);
+  const handleMouseUp = () => {
+    setIsPanning(false);
+    document.body.style.cursor = 'default';
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex flex-col select-none">
       {/* Header */}
       <div className="bg-gray-900 text-white p-4 flex justify-between items-center">
         <div className="flex items-center gap-2">
-          {icon && (
-            typeof icon === 'string' ? (
-              <span className="text-xl mr-2">{icon}</span>
-            ) : (
-              <span className="text-xl mr-2">{icon}</span>
-            )
-          )}
+          {icon && <span className="text-xl">{icon}</span>}
           <h2 className="text-lg font-medium truncate">{title}</h2>
         </div>
-        <button
-          onClick={onClose}
-          className="p-2 hover:bg-gray-700 rounded-full"
-          aria-label="Close"
-        >
+        <button onClick={onClose} className="p-2 hover:bg-gray-700 rounded-full" aria-label="Close">
           <X size={24} />
         </button>
       </div>
 
       {/* PDF Container */}
-      <div 
-        ref={pdfContainerRef}
+      <div
+        ref={containerRef}
         className="flex-1 overflow-auto bg-gray-800"
-        style={{
-          touchAction: 'pan-y pinch-zoom',
-          WebkitOverflowScrolling: 'touch',
-          overscrollBehavior: 'contain',
-        }}
+        style={{ touchAction: 'none', WebkitOverflowScrolling: 'touch' }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
       >
-        <div className="min-h-full flex flex-col items-center p-2 sm:p-4">
-          <div 
-            className="bg-white shadow-lg max-w-full"
-            style={{
-              width: 'fit-content',
-              margin: '0 auto',
-              transform: 'translateZ(0)', // Force GPU acceleration
-            }}
-          >
-            <object
-              data={`${pdfUrl}#page=${pageNumber}&zoom=${Math.round(scale * 100)}&view=FitH`}
-              type="application/pdf"
-              className="block w-full h-full min-h-[80vh]"
-              onLoad={() => {
-                // Set focus for keyboard navigation
-                const obj = document.querySelector('object');
-                if (obj) obj.focus();
-              }}
-              onError={(e) => {
-                console.error('Error loading PDF:', e);
-              }}
-            >
-              <div className="text-white p-4 text-center">
-                <p>Unable to display PDF. Please download it instead:</p>
-                <a 
-                  href={pdfUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-blue-400 underline mt-2 inline-block"
-                >
-                  Open PDF in new tab
-                </a>
+        <div className="flex justify-center py-4">
+          <Document 
+            file={pdfUrl}
+            onLoadSuccess={onDocumentLoadSuccess}
+            loading={
+              <div className="text-white text-center p-8">
+                Loading PDF...
               </div>
-            </object>
-          </div>
+            }
+            error={
+              <div className="text-white text-center p-8">
+                Failed to load PDF. Please try again or download it.
+              </div>
+            }>
+            <Page
+              pageNumber={pageNumber}
+              scale={scale}
+              renderTextLayer={false}
+              renderAnnotationLayer={false}
+              width={window.innerWidth * 0.9}
+            />
+          </Document>
         </div>
       </div>
 
-      {/* Controls */}
+      {/* Footer with controls */}
       <div className="bg-gray-900 p-3 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <button
             onClick={zoomOut}
-            disabled={currentZoomIndex === 0}
-            className={`p-2 rounded-full ${
-              currentZoomIndex === 0 
-                ? 'text-gray-500 cursor-not-allowed' 
-                : 'text-white hover:bg-gray-700'
-            }`}
+            className="p-2 text-white hover:bg-gray-700 rounded-full"
             aria-label="Zoom out"
           >
             <ZoomOut size={20} />
@@ -180,12 +184,7 @@ export default function PDFViewer({
           </span>
           <button
             onClick={zoomIn}
-            disabled={currentZoomIndex === ZOOM_LEVELS.length - 1}
-            className={`p-2 rounded-full ${
-              currentZoomIndex === ZOOM_LEVELS.length - 1 
-                ? 'text-gray-500 cursor-not-allowed' 
-                : 'text-white hover:bg-gray-700'
-            }`}
+            className="p-2 text-white hover:bg-gray-700 rounded-full"
             aria-label="Zoom in"
           >
             <ZoomIn size={20} />
@@ -204,22 +203,20 @@ export default function PDFViewer({
             onClick={goToPrevPage}
             disabled={pageNumber <= 1}
             className={`p-2 rounded-full ${
-              pageNumber <= 1
-                ? 'text-gray-500 cursor-not-allowed'
-                : 'text-white hover:bg-gray-700'
+              pageNumber <= 1 ? 'text-gray-500 cursor-not-allowed' : 'text-white hover:bg-gray-700'
             }`}
           >
             <ChevronLeft size={24} />
           </button>
           <span className="text-white text-sm min-w-[60px] text-center">
-            {pageNumber} {hasPageCount ? ` / ${externalTotalPages}` : ''}
+            {pageNumber} / {numPages || '...'}
           </span>
           <button
             onClick={goToNextPage}
-            disabled={hasPageCount ? pageNumber >= (externalTotalPages ?? 1) : false}
+            disabled={pageNumber >= numPages}
             className={`p-2 rounded-full ${
-              hasPageCount && pageNumber >= (externalTotalPages ?? 1)
-                ? 'text-gray-500 cursor-not-allowed' 
+              pageNumber >= numPages
+                ? 'text-gray-500 cursor-not-allowed'
                 : 'text-white hover:bg-gray-700'
             }`}
           >
