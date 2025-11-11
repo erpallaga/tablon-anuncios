@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { ZoomIn, ZoomOut, RotateCw } from "lucide-react";
 
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js`;
+// PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface PDFViewerProps {
   pdfUrl: string;
@@ -13,7 +14,7 @@ interface PDFViewerProps {
 
 export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [numPages, setNumPages] = useState<number>();
+  // Removed unused numPages state as we're only showing the first page
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -42,14 +43,9 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
     }
   }, [offset]);
 
-  // Center PDF on load
-  const handleDocumentLoad = ({ numPages }: { numPages: number }) => {
-    setNumPages(numPages);
-    const container = containerRef.current;
-    if (container) {
-      const rect = container.getBoundingClientRect();
-      updateOffset(rect.width / 2, rect.height / 2);
-    }
+  // Handle document load
+  const handleDocumentLoad = () => {
+    // No need to track numPages since we're only showing the first page
   };
 
   // --- Touch Handling (pinch + pan) ---
@@ -163,10 +159,27 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
             transition: isDragging ? "none" : "transform 0.05s linear",
           }}
         >
-          <Document file={pdfUrl} onLoadSuccess={handleDocumentLoad}>
-            {Array.from(new Array(numPages), (_, i) => (
-              <Page key={i + 1} pageNumber={i + 1} renderAnnotationLayer={false} renderTextLayer={false} />
-            ))}
+          <Document 
+            file={pdfUrl} 
+            onLoadSuccess={handleDocumentLoad}
+            loading={<div className="text-white">Loading PDF...</div>}
+            error={<div className="text-red-400">Failed to load PDF.</div>}
+          >
+            <Page 
+              pageNumber={1} 
+              width={Math.min(1000, window.innerWidth * 0.9)}
+              renderTextLayer={false}
+              renderAnnotationLayer={false}
+              onLoadSuccess={({ width }) => {
+                // Center the PDF after it loads
+                const container = containerRef.current;
+                if (container) {
+                  const x = (container.clientWidth - width * scale) / 2;
+const y = 20; // Small top padding
+                  setOffset({ x, y });
+                }
+              }}
+            />
           </Document>
         </div>
       </div>
