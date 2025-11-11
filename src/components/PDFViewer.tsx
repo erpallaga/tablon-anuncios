@@ -79,7 +79,7 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const rect = container.getBoundingClientRect();
+    container.getBoundingClientRect(); // Still call it for potential side effects
     updateOffset(0, 0);
   }, [scale]);
 
