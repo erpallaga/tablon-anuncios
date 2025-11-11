@@ -42,8 +42,21 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
     setPageSize({ width: viewport.width, height: viewport.height });
   };
 
-  // --- Pinch to Zoom ---
+  // --- Touch Handling (pinch + pan) ---
   const lastDistance = useRef<number | null>(null);
+  const touchStartOffset = useRef({ x: 0, y: 0 });
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      setIsDragging(true);
+      touchStartOffset.current = { x: offset.x, y: offset.y };
+      setLastPos({ x: touch.clientX, y: touch.clientY });
+    } else if (e.touches.length === 2) {
+      lastDistance.current = null;
+    }
+  };
+
   const handleTouchMove = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
       e.preventDefault();
@@ -58,9 +71,9 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
       lastDistance.current = distance;
     } else if (e.touches.length === 1 && isDragging) {
       const touch = e.touches[0];
-      const newX = touch.clientX - lastPos.x;
-      const newY = touch.clientY - lastPos.y;
-      updateOffset(newX, newY);
+      const dx = touch.clientX - lastPos.x;
+      const dy = touch.clientY - lastPos.y;
+      updateOffset(touchStartOffset.current.x + dx, touchStartOffset.current.y + dy);
     }
   };
 
@@ -170,16 +183,7 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onTouchStart={(e) => {
-          if (e.touches.length === 1) {
-            const touch = e.touches[0];
-            setIsDragging(true);
-            setLastPos({
-              x: touch.clientX - offset.x,
-              y: touch.clientY - offset.y,
-            });
-          }
-        }}
+        onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onWheel={handleWheel}
