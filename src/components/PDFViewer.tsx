@@ -1,432 +1,150 @@
-import { useEffect, useRef, useState } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
-import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut, RotateCw, Maximize2, Minimize2 } from 'lucide-react';
+import { useState, useRef, useEffect } from "react";
+import { Document, Page, pdfjs } from "react-pdf";
+import { ZoomIn, ZoomOut, RotateCw } from "lucide-react";
 
-// Import the PDF.js worker
-import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-
-// Set the worker source
-pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
-
-// iOS detection
-const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-              (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
-// Increase resolution for mobile devices
-const DPI = window.devicePixelRatio * 96;
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface PDFViewerProps {
   pdfUrl: string;
   title: string;
-  onClose: () => void;
   icon?: React.ReactNode;
+  onClose: () => void;
 }
 
-export default function PDFViewer({ pdfUrl, title, onClose }: PDFViewerProps) {
-  const [numPages, setNumPages] = useState<number>(0);
-  const [pageNumber, setPageNumber] = useState<number>(1);
-  const [error, setError] = useState<string>('');
-  const [scale, setScale] = useState<number>(1);
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState<number>(0);
-  const [touchStart, setTouchStart] = useState<number>(0);
-  const [initialScale, setInitialScale] = useState<number>(1);
-  // Rotation state with setter
-  const [rotation, setRotation] = useState<number>(0);
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
+  const lastDistance = useRef<number | null>(null);
+  const [rotation, setRotation] = useState(0);
 
+  const updateOffset = (x: number, y: number) => setOffset({ x, y });
 
-  // Handle container resizing
+  // Trackpad and wheel zoom/pan
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    
-    const updateSize = () => {
-      if (el) {
-        const width = Math.min(el.clientWidth, 1400);
-        setContainerWidth(width);
-      }
-    };
-    
-    const ro = new ResizeObserver(updateSize);
-    ro.observe(el);
-    updateSize();
-    
-    return () => ro.disconnect();
-  }, [isFullscreen]);
+    const container = containerRef.current;
+    if (!container) return;
 
-  // Handle keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isFullscreen) {
-        toggleFullscreen();
-      } else if (e.key === '+' || (e.ctrlKey && e.key === '=')) {
-        e.preventDefault();
-        zoomIn();
-      } else if (e.key === '-' || (e.ctrlKey && e.key === '-')) {
-        e.preventDefault();
-        zoomOut();
-      } else if (e.key === '0' && e.ctrlKey) {
-        e.preventDefault();
-        resetZoom();
-      } else if (e.key === 'r' || e.key === 'R') {
-        e.preventDefault();
-        // Rotation is handled via CSS transform
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        goToPrevPage();
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        goToNextPage();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFullscreen]);
-
-  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
-    setNumPages(numPages);
-    setError('');
-  };
-
-  const onDocumentLoadError = (error: Error) => {
-    console.error('Error loading PDF:', error);
-    setError(`Failed to load PDF document: ${error.message}`);
-    
-    // Try to open the PDF in a new tab as a fallback
-    if (isIOS) {
-      window.open(pdfUrl, '_blank');
-    }
-  };
-
-  // Navigation
-  const goToPrevPage = () => setPageNumber(prev => Math.max(prev - 1, 1));
-  const goToNextPage = () => setPageNumber(prev => Math.min(prev + 1, numPages));
-
-  // Zoom controls
-  const zoomIn = () => setScale(prev => Math.min(prev + 0.1, 3));
-  const zoomOut = () => setScale(prev => Math.max(prev - 0.1, 0.5));
-  const resetZoom = () => setScale(1);
-  const rotate = () => setRotation(prev => (prev + 90) % 360);
-
-  // Handle wheel event for zooming
-  const handleWheel = (e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
+    const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      setScale(prev => Math.min(Math.max(prev + delta, 0.5), 3));
-    }
-  };
+      if (e.ctrlKey) {
+        setScale((prev) => Math.min(5, Math.max(0.5, prev - e.deltaY * 0.0015)));
+      } else {
+        updateOffset(offset.x - e.deltaX, offset.y - e.deltaY);
+      }
+    };
 
-  // Handle touch events for pinch-to-zoom
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => container.removeEventListener("wheel", handleWheel);
+  }, [offset]);
+
+  // Touch Handling (pinch + pan)
+  const touchStartOffset = useRef({ x: 0, y: 0 });
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
-      e.preventDefault();
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      setTouchStart(Math.hypot(
-        touch2.clientX - touch1.clientX,
-        touch2.clientY - touch1.clientY
-      ));
-      setInitialScale(scale);
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      setIsDragging(true);
+      touchStartOffset.current = { x: offset.x, y: offset.y };
+      setLastPos({ x: t.clientX, y: t.clientY });
+    } else if (e.touches.length === 2) {
+      lastDistance.current = null;
     }
   };
-
   const handleTouchMove = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
       e.preventDefault();
-      e.stopPropagation();
-      
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      const currentDistance = Math.hypot(
-        touch2.clientX - touch1.clientX,
-        touch2.clientY - touch1.clientY
-      );
-      
-      if (touchStart > 0) {
-        const newScale = Math.min(Math.max(initialScale * (currentDistance / touchStart), 0.5), 3);
-        setScale(newScale);
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (lastDistance.current) {
+        const delta = distance - lastDistance.current;
+        setScale((prev) => Math.min(5, Math.max(0.5, prev + delta * 0.002)));
       }
+      lastDistance.current = distance;
+    } else if (e.touches.length === 1 && isDragging) {
+      const t = e.touches[0];
+      const dx = t.clientX - lastPos.x;
+      const dy = t.clientY - lastPos.y;
+      updateOffset(touchStartOffset.current.x + dx, touchStartOffset.current.y + dy);
     }
   };
-  
   const handleTouchEnd = () => {
-    setTouchStart(0);
+    lastDistance.current = null;
+    setIsDragging(false);
   };
 
-  // Calculate distance between two touch points
-  const getDistance = (touch1: Touch, touch2: Touch) => {
-    return Math.hypot(
-      touch2.pageX - touch1.pageX,
-      touch2.pageY - touch1.pageY
-    );
-  };
-
-  // Toggle fullscreen mode
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen?.().catch(err => {
-        console.error('Error attempting to enable fullscreen:', err);
-      });
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen?.();
-      setIsFullscreen(false);
-    }
-  };
-
-  // Calculate page width based on container and DPI
-  const getPageWidth = () => {
-    if (!containerRef.current) return 800; // Default width
-    
-    const containerWidth = containerRef.current.clientWidth - 40; // Account for padding
-    const isMobile = window.innerWidth <= 768;
-    const maxWidth = isFullscreen ? 1600 : 1200;
-    const scaledWidth = Math.min(containerWidth, maxWidth);
-    const dpiScale = isMobile ? DPI / 96 : 1;
-    return Math.floor(scaledWidth * dpiScale);
-  };
-
-  const pageWidth = getPageWidth();
-
-  // Add debug info
-  console.log('PDFViewer render:', {
-    pdfUrl,
-    pageNumber,
-    numPages,
-    scale,
-    rotation,
-    containerWidth,
-    isIOS,
-    error
-  });
+  // Center PDF on load or zoom change
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    container.getBoundingClientRect(); // Still call it for potential side effects
+    updateOffset(0, 0);
+  }, [scale]);
 
   return (
-    <div 
-      ref={containerRef}
-      className={`fixed inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center z-50 p-4 transition-all duration-300 ${isFullscreen ? 'p-0' : ''}`}
-      onKeyDown={(e) => e.stopPropagation()}
-      style={{
-        WebkitOverflowScrolling: 'touch',
-        overscrollBehavior: 'contain',
-        maxHeight: isIOS ? 'var(--visual-viewport-height, 90vh)' : '90vh',
-        height: isIOS ? 'var(--visual-viewport-height, 90vh)' : 'auto',
-        width: '100%',
-        overflow: 'hidden',
-        touchAction: 'none',
-        userSelect: 'none'
-      }}
-    >
-      {/* Header with improved touch targets for mobile */}
-      <div className="bg-gray-100 px-4 py-3 border-b border-gray-200 flex items-center justify-between w-full">
-        <div className="flex items-center space-x-2">
-          <span className="text-lg font-medium text-gray-800">{title}</span>
+    <div className="relative w-full h-screen bg-gray-950 overflow-hidden touch-none select-none">
+      {/* Header */}
+      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between bg-gray-900/90 text-white p-4">
+        <div className="flex items-center gap-2">
+          {icon && <span className="text-xl">{icon}</span>}
+          <h2 className="text-lg font-medium">{title}</h2>
         </div>
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={toggleFullscreen}
-            className="p-3 rounded-full hover:bg-gray-200 transition-colors active:bg-gray-300"
-            aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-            style={{
-              WebkitTapHighlightColor: 'transparent',
-              minWidth: '44px',
-              minHeight: '44px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            {isFullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+        <div className="flex items-center gap-3">
+          <button onClick={() => setScale((s) => Math.min(5, s * 1.2))} className="p-1 hover:bg-gray-700 rounded">
+            <ZoomIn size={20} />
           </button>
-          <button
-            onClick={onClose}
-            className="p-3 rounded-full hover:bg-gray-200 transition-colors active:bg-gray-300"
-            aria-label="Close"
-            style={{
-              WebkitTapHighlightColor: 'transparent',
-              minWidth: '44px',
-              minHeight: '44px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            <X size={20} />
+          <button onClick={() => setScale((s) => Math.max(0.5, s / 1.2))} className="p-1 hover:bg-gray-700 rounded">
+            <ZoomOut size={20} />
+          </button>
+          <button onClick={() => setRotation((r) => (r + 90) % 360)} className="p-1 hover:bg-gray-700 rounded">
+            <RotateCw size={20} />
+          </button>
+          <button onClick={onClose} className="ml-2 p-1 hover:bg-gray-700 rounded">
+            ✕
           </button>
         </div>
       </div>
 
-      {/* PDF Content */}
-      <div 
+      {/* PDF Container */}
+      <div
         ref={containerRef}
-        className="flex-1 w-full overflow-auto relative touch-none"
-        style={{
-          WebkitOverflowScrolling: 'touch',
-          overscrollBehavior: 'contain',
-          maxHeight: isIOS ? 'calc(var(--visual-viewport-height, 100%) - 120px)' : 'calc(100vh - 180px)',
-          height: isIOS ? 'calc(var(--visual-viewport-height, 100%) - 120px)' : 'calc(100vh - 180px)',
-          touchAction: 'pan-y',
-          WebkitUserSelect: 'none',
-          userSelect: 'none',
-          padding: '1rem 0'
+className="absolute top-[56px] bottom-0 left-0 right-0 overflow-hidden flex items-start justify-center pt-8"        style={{ touchAction: "none" }}
+        onMouseDown={(e) => {
+          setIsDragging(true);
+          setLastPos({ x: e.clientX, y: e.clientY });
         }}
+        onMouseMove={(e) => {
+          if (!isDragging) return;
+          const dx = e.clientX - lastPos.x;
+          const dy = e.clientY - lastPos.y;
+          setLastPos({ x: e.clientX, y: e.clientY });
+          updateOffset(offset.x + dx, offset.y + dy);
+        }}
+        onMouseUp={() => setIsDragging(false)}
+        onMouseLeave={() => setIsDragging(false)}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
       >
-        {error ? (
-          <div className="text-red-600 text-center p-4">
-            {error}
-            {isIOS && (
-              <div className="mt-2 text-sm text-gray-600">
-                If the PDF doesn't load, try opening it in a new tab:
-                <a 
-                  href={pdfUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-blue-500 underline ml-1"
-                >
-                  Open PDF
-                </a>
-              </div>
-            )}
-          </div>
-        ) : (
-          <Document
-            file={pdfUrl}
-            onLoadSuccess={onDocumentLoadSuccess}
-            onLoadError={onDocumentLoadError}
-            loading={
-              <div className="flex items-center justify-center h-full">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-              </div>
-            }
-            options={{
-              cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
-              cMapPacked: true,
-              standardFontDataUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts/`, // Added trailing slash
-              disableAutoFetch: false,
-              disableStream: false,
-              disableRange: false,
-              useSystemFonts: false,
-              isEvalSupported: false,
-              maxImageSize: -1,
-              useWorkerFetch: true,
-              stopAtErrors: false,
-              verbosity: 0
-            }}
-            onItemClick={({ dest, pageNumber, destArray }) => {
-              // Handle internal PDF links
-              if (dest) {
-                // Handle the destination
-              } else if (pageNumber) {
-                setPageNumber(pageNumber);
-              }
-            }}
-          >
-            <div 
-              className="relative"
-              style={{
-                transform: `scale(${scale}) rotate(${rotation}deg)`,
-                transformOrigin: '0 0',
-                width: `${100/scale}%`,
-                minHeight: '100%',
-                touchAction: 'pan-x pan-y',
-                WebkitUserSelect: 'none',
-                userSelect: 'none',
-                willChange: 'transform',
-                backfaceVisibility: 'hidden',
-                WebkitBackfaceVisibility: 'hidden',
-                WebkitFontSmoothing: 'subpixel-antialiased',
-                transition: 'transform 0.1s ease-out',
-                margin: '0 auto'
-              }}
-            >
-              <Page 
-                pageNumber={pageNumber} 
-                width={pageWidth}
-                loading={
-                  <div className="flex items-center justify-center h-full">
-                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-                  </div>
-                }
-                error={
-                  <div className="text-red-500 p-4 text-center">
-                    Error loading page {pageNumber}. Please try again.
-                  </div>
-                }
-                renderTextLayer={false}
-                renderAnnotationLayer={false}
-                onRenderError={(error) => {
-                  console.error('Error rendering PDF page:', error);
-                  setError(`Error rendering page: ${error.message}`);
-                }}
-              />
-            </div>
+        <div
+          style={{
+            transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale}) rotate(${rotation}deg)`,
+            transformOrigin: "top center",
+            transition: isDragging ? "none" : "transform 0.05s linear",
+          }}
+        >
+          <Document file={pdfUrl} loading={<div className="text-white">Loading PDF…</div>}>
+            <Page
+              pageNumber={1}
+              renderTextLayer={false}
+              renderAnnotationLayer={false}
+              width={Math.min(1000, window.innerWidth * 0.9)}
+            />
           </Document>
-        )}
-      </div>
-
-      {/* Navigation controls */}
-      {!error && numPages > 0 && (
-        <div className="bg-white border-t border-gray-200 p-3 sticky bottom-0 z-10 w-full">
-          <div className="flex items-center justify-between max-w-2xl mx-auto w-full">
-            <button
-              onClick={goToPrevPage}
-              disabled={pageNumber <= 1}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-150 active:scale-95"
-              title="Previous page (Left Arrow)"
-            >
-              <ChevronLeft className="w-5 h-5" />
-              <span className="text-sm sm:text-base">Previous</span>
-            </button>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={zoomOut}
-                className="p-2 rounded-md hover:bg-gray-100 transition-colors"
-                title="Zoom out"
-              >
-                <ZoomOut className="w-5 h-5 text-gray-700" />
-              </button>
-              <button
-                onClick={resetZoom}
-                className="px-3 py-1 text-sm font-medium text-gray-700 bg-gray-100 rounded"
-                title="Reset zoom"
-              >
-                {Math.round(scale * 100)}%
-              </button>
-              <button
-                onClick={zoomIn}
-                className="p-2 rounded-md hover:bg-gray-100 transition-colors"
-                title="Zoom in"
-              >
-                <ZoomIn className="w-5 h-5 text-gray-700" />
-              </button>
-              <button
-                onClick={rotate}
-                className="p-2 rounded-md hover:bg-gray-100 transition-colors"
-                title="Rotate"
-              >
-                <RotateCw className="w-5 h-5 text-gray-700" />
-              </button>
-            </div>
-
-            <button
-              onClick={goToNextPage}
-              disabled={pageNumber >= numPages}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-150 active:scale-95"
-              title="Next page (Right Arrow)"
-            >
-              <span className="text-sm sm:text-base">Next</span>
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
