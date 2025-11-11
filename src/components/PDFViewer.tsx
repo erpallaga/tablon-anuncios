@@ -5,7 +5,14 @@ import { ZoomIn, ZoomOut, RotateCw } from "lucide-react";
 // PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
-export default function PDFViewer({ file }: { file: string }) {
+interface PDFViewerProps {
+  pdfUrl: string;
+  title: string;
+  icon?: React.ReactNode;
+  onClose: () => void;
+}
+
+export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [pageSize, setPageSize] = useState({ width: 0, height: 0 });
@@ -119,8 +126,23 @@ export default function PDFViewer({ file }: { file: string }) {
 
   return (
     <div className="relative w-full h-screen bg-neutral-900 overflow-hidden">
+      {/* Header */}
+      <div className="absolute top-0 left-0 right-0 bg-gray-900 text-white p-4 flex justify-between items-center z-20">
+        <div className="flex items-center gap-2">
+          {icon && <span className="text-xl">{icon}</span>}
+          <h2 className="text-lg font-medium">{title}</h2>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-2 hover:bg-gray-700 rounded-full transition-colors"
+          aria-label="Close"
+        >
+          ✕
+        </button>
+      </div>
+
       {/* Toolbar */}
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-3 z-20 bg-black/50 p-2 rounded-xl backdrop-blur">
+      <div className="absolute top-20 left-1/2 -translate-x-1/2 flex gap-3 z-20 bg-black/50 p-2 rounded-xl backdrop-blur">
         <button
           onClick={() => setScale((s) => Math.min(5, s + 0.2))}
           className="text-white"
@@ -169,7 +191,7 @@ export default function PDFViewer({ file }: { file: string }) {
             transformOrigin: "top left",
           }}
         >
-          <Document file={file} onLoadSuccess={onDocumentLoadSuccess}>
+          <Document file={pdfUrl} onLoadSuccess={onDocumentLoadSuccess}>
             <Page
               pageNumber={1}
               onLoadSuccess={onPageLoadSuccess}
