@@ -110,8 +110,7 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
       {/* PDF Container */}
       <div
         ref={containerRef}
-        className="absolute top-[56px] bottom-0 left-0 right-0 overflow-hidden flex items-center justify-center"
-        style={{ touchAction: "none" }}
+className="absolute top-[56px] bottom-0 left-0 right-0 overflow-hidden flex items-start justify-center pt-8"        style={{ touchAction: "none" }}
         onMouseDown={(e) => {
           setIsDragging(true);
           setLastPos({ x: e.clientX, y: e.clientY });
@@ -132,7 +131,7 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
         <div
           style={{
             transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale}) rotate(${rotation}deg)`,
-            transformOrigin: "center center",
+            transformOrigin: "top center",
             transition: isDragging ? "none" : "transform 0.05s linear",
           }}
         >
