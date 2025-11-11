@@ -4,7 +4,14 @@ import { ZoomIn, ZoomOut, RotateCw } from "lucide-react";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js`;
 
-export default function PDFViewer({ file }: { file: string }) {
+interface PDFViewerProps {
+  pdfUrl: string;
+  title: string;
+  icon?: React.ReactNode;
+  onClose: () => void;
+}
+
+export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [numPages, setNumPages] = useState<number>();
   const [scale, setScale] = useState(1);
@@ -87,17 +94,43 @@ export default function PDFViewer({ file }: { file: string }) {
   return (
     <div className="relative w-full h-screen bg-gray-950 overflow-hidden touch-none select-none">
       {/* Toolbar - fixed and outside the transform */}
-      <div className="absolute top-0 left-0 w-full z-20 flex items-center justify-center gap-4 bg-gray-900/70 backdrop-blur-sm text-white py-2">
-        <button onClick={() => setScale((s) => Math.min(5, s * 1.2))}>
-          <ZoomIn />
-        </button>
-        <button onClick={() => setScale((s) => Math.max(0.5, s / 1.2))}>
-          <ZoomOut />
-        </button>
-        <button onClick={() => setRotation((r) => (r + 90) % 360)}>
-          <RotateCw />
-        </button>
-      </div>
+        {/* Header */}
+        <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between bg-gray-900/90 text-white p-4">
+          <div className="flex items-center gap-2">
+            {icon && <span className="text-xl">{icon}</span>}
+            <h2 className="text-lg font-medium">{title}</h2>
+          </div>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setScale((s) => Math.min(5, s * 1.2))}
+              className="p-1 hover:bg-gray-700 rounded"
+              aria-label="Zoom in"
+            >
+              <ZoomIn size={20} />
+            </button>
+            <button 
+              onClick={() => setScale((s) => Math.max(0.5, s / 1.2))}
+              className="p-1 hover:bg-gray-700 rounded"
+              aria-label="Zoom out"
+            >
+              <ZoomOut size={20} />
+            </button>
+            <button 
+              onClick={() => setRotation((r) => (r + 90) % 360)}
+              className="p-1 hover:bg-gray-700 rounded"
+              aria-label="Rotate"
+            >
+              <RotateCw size={20} />
+            </button>
+            <button 
+              onClick={onClose}
+              className="ml-2 p-1 hover:bg-gray-700 rounded"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
 
       {/* PDF Container */}
       <div
@@ -130,7 +163,7 @@ export default function PDFViewer({ file }: { file: string }) {
             transition: isDragging ? "none" : "transform 0.05s linear",
           }}
         >
-          <Document file={file} onLoadSuccess={handleDocumentLoad}>
+          <Document file={pdfUrl} onLoadSuccess={handleDocumentLoad}>
             {Array.from(new Array(numPages), (_, i) => (
               <Page key={i + 1} pageNumber={i + 1} renderAnnotationLayer={false} renderTextLayer={false} />
             ))}
