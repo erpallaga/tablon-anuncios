@@ -80,7 +80,7 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
     const container = containerRef.current;
     if (!container) return;
     const rect = container.getBoundingClientRect();
-    updateOffset(rect.width / 2, rect.height / 2 - 40); // account for header
+    updateOffset(0, 0);
   }, [scale]);
 
   return (
