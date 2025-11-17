@@ -75,13 +75,10 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
     setIsDragging(false);
   };
 
-  // Center PDF on load or zoom change
+// Center PDF on initial load only
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    container.getBoundingClientRect(); // Still call it for potential side effects
     updateOffset(0, 0);
-  }, [scale]);
+  }, []);
 
   return (
     <div className="relative w-full h-screen bg-gray-950 overflow-hidden touch-none select-none">
