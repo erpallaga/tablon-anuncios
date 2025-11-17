@@ -18,6 +18,7 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
   const [isDragging, setIsDragging] = useState(false);
   const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
   const lastDistance = useRef<number | null>(null);
+  const lastTapTime = useRef<number>(0);
   const [rotation, setRotation] = useState(0);
 
   const updateOffset = (x: number, y: number) => setOffset({ x, y });
@@ -45,6 +46,18 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 1) {
       const t = e.touches[0];
+      const now = Date.now();
+      
+      // Detectar doble tap
+      if (now - lastTapTime.current < 300) {
+        e.preventDefault();
+        // Alternar entre zoom 1 y 2
+        setScale((prev) => prev > 1.3 ? 1 : 2);
+        lastTapTime.current = 0;
+        return;
+      }
+      lastTapTime.current = now;
+      
       setIsDragging(true);
       touchStartOffset.current = { x: offset.x, y: offset.y };
       setLastPos({ x: t.clientX, y: t.clientY });
@@ -75,13 +88,10 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
     setIsDragging(false);
   };
 
-  // Center PDF on load or zoom change
+// Center PDF on initial load only
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    container.getBoundingClientRect(); // Still call it for potential side effects
     updateOffset(0, 0);
-  }, [scale]);
+  }, []);
 
   return (
     <div className="relative w-full h-screen bg-gray-950 overflow-hidden touch-none select-none">
@@ -135,12 +145,16 @@ className="absolute top-[56px] bottom-0 left-0 right-0 overflow-hidden flex item
             transition: isDragging ? "none" : "transform 0.05s linear",
           }}
         >
-          <Document file={pdfUrl} loading={<div className="text-white">Loading PDF…</div>}>
+          <Document 
+            file={pdfUrl} 
+            loading={<div className="text-white">Loading PDF…</div>}
+          >
             <Page
               pageNumber={1}
               renderTextLayer={false}
               renderAnnotationLayer={false}
               width={Math.min(1000, window.innerWidth * 0.9)}
+              scale={1.5}
             />
           </Document>
         </div>
