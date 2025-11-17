@@ -14,7 +14,6 @@ interface PDFViewerProps {
 export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-  const [numPages, setNumPages] = useState<number>(0);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
@@ -136,7 +135,6 @@ className="absolute top-[56px] bottom-0 left-0 right-0 overflow-hidden flex item
           <Document 
             file={pdfUrl} 
             loading={<div className="text-white">Loading PDF…</div>}
-            onLoadSuccess={({ numPages }) => setNumPages(numPages)}
           >
             <Page
               pageNumber={1}
