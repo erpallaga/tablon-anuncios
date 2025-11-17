@@ -18,6 +18,7 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
   const [isDragging, setIsDragging] = useState(false);
   const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
   const lastDistance = useRef<number | null>(null);
+  const lastTapTime = useRef<number>(0);
   const [rotation, setRotation] = useState(0);
 
   const updateOffset = (x: number, y: number) => setOffset({ x, y });
@@ -45,6 +46,18 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 1) {
       const t = e.touches[0];
+      const now = Date.now();
+      
+      // Detectar doble tap
+      if (now - lastTapTime.current < 300) {
+        e.preventDefault();
+        // Alternar entre zoom 1 y 2
+        setScale((prev) => prev > 1.3 ? 1 : 2);
+        lastTapTime.current = 0;
+        return;
+      }
+      lastTapTime.current = now;
+      
       setIsDragging(true);
       touchStartOffset.current = { x: offset.x, y: offset.y };
       setLastPos({ x: t.clientX, y: t.clientY });
