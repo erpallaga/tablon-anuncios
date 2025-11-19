@@ -20,6 +20,8 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
   const lastDistance = useRef<number | null>(null);
   const lastTapTime = useRef<number>(0);
   const [rotation, setRotation] = useState(0);
+  const [numPages, setNumPages] = useState<number>(1);
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
   const updateOffset = (x: number, y: number) => setOffset({ x, y });
 
@@ -111,6 +113,26 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
           <button onClick={() => setRotation((r) => (r + 90) % 360)} className="p-1 hover:bg-gray-700 rounded">
             <RotateCw size={20} />
           </button>
+          {numPages > 1 && (
+            <>
+              <div className="h-5 w-px bg-gray-600 mx-1" />
+              <button 
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} 
+                disabled={currentPage === 1}
+                className="p-1 hover:bg-gray-700 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                ←
+              </button>
+              <span className="text-sm px-2">{currentPage} / {numPages}</span>
+              <button 
+                onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))} 
+                disabled={currentPage === numPages}
+                className="p-1 hover:bg-gray-700 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                →
+              </button>
+            </>
+          )}
           <button onClick={onClose} className="ml-2 p-1 hover:bg-gray-700 rounded">
             ✕
           </button>
@@ -148,9 +170,10 @@ className="absolute top-[56px] bottom-0 left-0 right-0 overflow-hidden flex item
           <Document 
             file={pdfUrl} 
             loading={<div className="text-white">Loading PDF…</div>}
+            onLoadSuccess={({ numPages }) => setNumPages(numPages)}
           >
             <Page
-              pageNumber={1}
+              pageNumber={currentPage}
               renderTextLayer={false}
               renderAnnotationLayer={false}
               width={Math.min(1000, window.innerWidth * 0.9)}
