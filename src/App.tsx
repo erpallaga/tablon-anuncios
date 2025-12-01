@@ -58,12 +58,14 @@ function App() {
           )}
 
           {selectedItem ? (
-            <PDFViewer
-              pdfUrl={selectedItem.pdfUrl}
-              title={selectedItem.title}
-              icon={selectedItem.icon}
-              onClose={handleGoHome}
-            />
+            <div className="fixed inset-0 z-50">
+              <PDFViewer
+                pdfUrl={selectedItem.pdfUrl}
+                title={selectedItem.title}
+                icon={selectedItem.icon}
+                onClose={handleGoHome}
+              />
+            </div>
           ) : (
             <Grid items={gridItems} onItemClick={handleItemClick} />
           )}
