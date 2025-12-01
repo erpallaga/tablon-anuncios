@@ -49,7 +49,7 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
     if (e.touches.length === 1) {
       const t = e.touches[0];
       const now = Date.now();
-      
+
       // Detectar doble tap
       if (now - lastTapTime.current < 300) {
         e.preventDefault();
@@ -59,7 +59,7 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
         return;
       }
       lastTapTime.current = now;
-      
+
       setIsDragging(true);
       touchStartOffset.current = { x: offset.x, y: offset.y };
       setLastPos({ x: t.clientX, y: t.clientY });
@@ -90,59 +90,70 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
     setIsDragging(false);
   };
 
-// Center PDF on initial load only
+  // Center PDF on initial load only
   useEffect(() => {
     updateOffset(0, 0);
   }, []);
 
   return (
     <div className="relative w-full h-screen bg-gray-950 overflow-hidden touch-none select-none">
+      {/* Fixed Close Button - Always accessible */}
+      <button
+        onClick={onClose}
+        className="fixed top-4 right-4 z-30 p-2 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg transition-colors"
+        aria-label="Cerrar"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+
       {/* Header */}
-      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between bg-gray-900/90 text-white p-4">
-        <div className="flex items-center gap-2">
-          {icon && <span className="text-xl">{icon}</span>}
-          <h2 className="text-lg font-medium">{title}</h2>
+      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between bg-gray-900/90 text-white p-4 pr-16">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {icon && <span className="text-xl flex-shrink-0">{icon}</span>}
+          <h2 className="text-lg font-medium truncate">{title}</h2>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={() => setScale((s) => Math.min(5, s * 1.2))} className="p-1 hover:bg-gray-700 rounded">
+        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+          <button onClick={() => setScale((s) => Math.min(5, s * 1.2))} className="p-1 hover:bg-gray-700 rounded" aria-label="Aumentar zoom">
             <ZoomIn size={20} />
           </button>
-          <button onClick={() => setScale((s) => Math.max(0.5, s / 1.2))} className="p-1 hover:bg-gray-700 rounded">
+          <button onClick={() => setScale((s) => Math.max(0.5, s / 1.2))} className="p-1 hover:bg-gray-700 rounded" aria-label="Reducir zoom">
             <ZoomOut size={20} />
           </button>
-          <button onClick={() => setRotation((r) => (r + 90) % 360)} className="p-1 hover:bg-gray-700 rounded">
+          <button onClick={() => setRotation((r) => (r + 90) % 360)} className="p-1 hover:bg-gray-700 rounded" aria-label="Rotar">
             <RotateCw size={20} />
           </button>
           {numPages > 1 && (
             <>
               <div className="h-5 w-px bg-gray-600 mx-1" />
-              <button 
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} 
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
                 className="p-1 hover:bg-gray-700 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Página anterior"
               >
                 ←
               </button>
-              <span className="text-sm px-2">{currentPage} / {numPages}</span>
-              <button 
-                onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))} 
+              <span className="text-sm px-1 sm:px-2 whitespace-nowrap">{currentPage} / {numPages}</span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
                 disabled={currentPage === numPages}
                 className="p-1 hover:bg-gray-700 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Página siguiente"
               >
                 →
               </button>
             </>
           )}
-          <button onClick={onClose} className="ml-2 p-1 hover:bg-gray-700 rounded">
-            ✕
-          </button>
         </div>
       </div>
 
       {/* PDF Container */}
       <div
         ref={containerRef}
-className="absolute top-[56px] bottom-0 left-0 right-0 overflow-hidden flex items-start justify-center pt-8"        style={{ touchAction: "none" }}
+        className="absolute top-[56px] bottom-0 left-0 right-0 overflow-hidden flex items-start justify-center pt-8" style={{ touchAction: "none" }}
         onMouseDown={(e) => {
           setIsDragging(true);
           setLastPos({ x: e.clientX, y: e.clientY });
@@ -167,8 +178,8 @@ className="absolute top-[56px] bottom-0 left-0 right-0 overflow-hidden flex item
             transition: isDragging ? "none" : "transform 0.05s linear",
           }}
         >
-          <Document 
-            file={pdfUrl} 
+          <Document
+            file={pdfUrl}
             loading={<div className="text-white">Loading PDF…</div>}
             onLoadSuccess={({ numPages }) => setNumPages(numPages)}
           >
