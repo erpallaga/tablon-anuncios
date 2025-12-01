@@ -22,5 +22,19 @@ export const authService = {
     // Simple comparison (in production, you'd want to hash and compare)
     return password === masterPassword;
   },
+
+  /**
+   * Verify access password for general site access
+   */
+  async verifyAccessPassword(password: string): Promise<boolean> {
+    const accessPassword = import.meta.env.VITE_ACCESS_PASSWORD;
+
+    if (!accessPassword) {
+      console.warn('VITE_ACCESS_PASSWORD not set. Using default "1234"');
+      return password === '1234';
+    }
+
+    return password === accessPassword;
+  },
 };
 
