@@ -77,13 +77,17 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
           <div className="p-8">
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Hidden username field to trigger password manager */}
+
               <input
                 type="text"
+                id="username"
                 name="username"
                 value="congregacion"
                 autoComplete="username"
-                className="hidden"
+                style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', height: 0, width: 0, margin: 0 }}
                 readOnly
+                tabIndex={-1}
+                aria-hidden="true"
               />
 
               <div>
