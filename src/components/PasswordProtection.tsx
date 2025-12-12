@@ -75,19 +75,20 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
           </div>
 
           <div className="p-8">
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6" autoComplete="on">
               {/* Hidden username field to trigger password manager */}
 
               {/* Hidden email field to trigger password manager heuristics */}
-              <input
-                type="email"
-                id="username"
-                name="username"
-                value="acceso@congregacion.local"
-                autoComplete="username"
-                style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}
-                tabIndex={-1}
-              />
+              <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
+                <label htmlFor="username">Usuario</label>
+                <input
+                  type="email"
+                  id="username"
+                  name="username"
+                  value="acceso@congregacion.local"
+                  autoComplete="username"
+                />
+              </div>
 
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
