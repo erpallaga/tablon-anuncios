@@ -79,17 +79,15 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
               {/* Hidden username field to trigger password manager */}
 
               {/* Hidden email field to trigger password manager heuristics */}
-              <div style={{ height: 0, overflow: 'hidden' }}>
-                <input
-                  type="email"
-                  id="username"
-                  name="username"
-                  value="acceso@congregacion.local"
-                  autoComplete="username"
-                  readOnly
-                  tabIndex={-1}
-                />
-              </div>
+              <input
+                type="email"
+                id="username"
+                name="username"
+                value="acceso@congregacion.local"
+                autoComplete="username"
+                style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}
+                tabIndex={-1}
+              />
 
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
