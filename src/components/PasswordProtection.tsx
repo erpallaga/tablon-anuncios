@@ -84,10 +84,8 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
                 name="username"
                 value="congregacion"
                 autoComplete="username"
-                style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', height: 0, width: 0, margin: 0 }}
-                readOnly
+                style={{ position: 'absolute', opacity: 0, zIndex: -1, width: '1px', height: '1px' }}
                 tabIndex={-1}
-                aria-hidden="true"
               />
 
               <div>
