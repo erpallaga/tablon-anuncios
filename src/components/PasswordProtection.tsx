@@ -76,6 +76,16 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
 
           <div className="p-8">
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Hidden username field to trigger password manager */}
+              <input
+                type="text"
+                name="username"
+                value="congregacion"
+                autoComplete="username"
+                className="hidden"
+                readOnly
+              />
+
               <div>
                 <label htmlFor="access-password" className="block text-sm font-medium text-gray-700 mb-2">
                   Contraseña de acceso
@@ -83,6 +93,8 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
                 <input
                   type="password"
                   id="access-password"
+                  name="password"
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
