@@ -22,7 +22,10 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
     return () => clearTimeout(timer);
   }, []);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
     setIsVerifying(true);
     setError('');
 
@@ -79,7 +82,13 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
           </div>
 
           <div className="p-8">
-            <div className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6" role="form">
+              {/* Hidden form element for Safari password manager */}
+              <div style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }}>
+                <input type="text" name="fakeusername" autoComplete="username" tabIndex={-1} />
+                <input type="password" name="fakepassword" autoComplete="current-password" tabIndex={-1} />
+              </div>
+
               {/* Visible username field with fixed value - required for password managers */}
               <div>
                 <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
@@ -93,6 +102,7 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
                   value="congregacion"
                   readOnly
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-default"
+                  tabIndex={-1}
                 />
               </div>
 
@@ -121,7 +131,7 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
               </div>
 
               <button
-                onClick={handleSubmit}
+                type="submit"
                 disabled={isVerifying}
                 className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transform transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
@@ -134,7 +144,7 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
                   <span>Entrar al Tablón</span>
                 )}
               </button>
-            </div>
+            </form>
           </div>
 
           <div className="bg-gray-50 px-8 py-4 border-t border-gray-100 text-center">
