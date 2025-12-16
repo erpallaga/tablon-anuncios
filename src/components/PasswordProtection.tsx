@@ -104,13 +104,14 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
                   type="password"
                   id="password"
                   name="password"
-                  autoComplete="current-password"
+                  autoComplete="current-password webauthn"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyPress={handleKeyPress}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   placeholder="••••••••"
                   autoFocus
+                  data-form-type="login"
                 />
                 {error && (
                   <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
