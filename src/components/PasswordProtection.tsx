@@ -76,6 +76,13 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
 
           <div className="p-8">
             <form onSubmit={handleSubmit} method="post" action="" className="space-y-6">
+              {/* Hidden form element for Safari password manager */}
+              <div style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }}>
+                <input type="text" name="fakeusername" autoComplete="username" tabIndex={-1} />
+                <input type="password" name="fakepassword" autoComplete="current-password" tabIndex={-1} />
+              </div>
+
+              {/* Visible username field with fixed value - required for password managers */}
               <div>
                 <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
                   Usuario
@@ -85,8 +92,10 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
                   id="username"
                   name="username"
                   autoComplete="username"
-                  defaultValue="congregacion"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value="congregacion"
+                  readOnly
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-default"
+                  tabIndex={-1}
                 />
               </div>
 
