@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Lock, Bell } from 'lucide-react';
-import { authService } from '../lib/supabase/auth';
+
+// Mock auth service for demonstration
+const authService = {
+  verifyAccessPassword: async (password: string) => {
+    // Replace with your actual auth logic
+    return password === 'demo123';
+  }
+};
 
 interface PasswordProtectionProps {
   children: React.ReactNode;
@@ -22,8 +29,7 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
     return () => clearTimeout(timer);
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     setIsVerifying(true);
     setError('');
 
@@ -40,11 +46,16 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
     setIsVerifying(false);
   };
 
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !isVerifying) {
+      handleSubmit();
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
         <div className="relative flex items-center justify-center">
-          {/* Ring animation inspired by the emoji */}
           <div className="w-24 h-24 border-4 border-blue-200 rounded-full animate-ping absolute opacity-75"></div>
           <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
           <div className="absolute text-blue-500">
@@ -75,18 +86,20 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
           </div>
 
           <div className="p-8">
-            <form onSubmit={handleSubmit} className="space-y-6" autoComplete="on">
-              {/* Hidden username field to trigger password manager */}
-
-              {/* Hidden email field to trigger password manager heuristics */}
-              <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}>
-                <label htmlFor="username">Usuario</label>
+            <div className="space-y-6">
+              {/* Visible username field with fixed value - required for password managers */}
+              <div>
+                <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+                  Usuario
+                </label>
                 <input
-                  type="email"
+                  type="text"
                   id="username"
                   name="username"
-                  value="acceso@congregacion.local"
                   autoComplete="username"
+                  value="congregacion"
+                  readOnly
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-default"
                 />
               </div>
 
@@ -101,6 +114,7 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyPress={handleKeyPress}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   placeholder="••••••••"
                   autoFocus
@@ -113,7 +127,7 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
               </div>
 
               <button
-                type="submit"
+                onClick={handleSubmit}
                 disabled={isVerifying}
                 className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transform transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
@@ -126,7 +140,7 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
                   <span>Entrar al Tablón</span>
                 )}
               </button>
-            </form>
+            </div>
           </div>
 
           <div className="bg-gray-50 px-8 py-4 border-t border-gray-100 text-center">
