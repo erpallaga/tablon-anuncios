@@ -9,7 +9,6 @@ interface PasswordProtectionProps {
 export default function PasswordProtection({ children }: PasswordProtectionProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [username, setUsername] = useState('congregacion');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
@@ -76,8 +75,7 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
           </div>
 
           <div className="p-8">
-            <div className="space-y-6">
-              {/* Username field - Safari needs this to be editable for reliable password saving */}
+            <form onSubmit={handleSubmit} method="post" action="" className="space-y-6">
               <div>
                 <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
                   Usuario
@@ -87,9 +85,8 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
                   id="username"
                   name="username"
                   autoComplete="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  defaultValue="congregacion"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
 
@@ -104,9 +101,10 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="••••••••"
                   autoFocus
+                  required
                 />
                 {error && (
                   <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
@@ -116,9 +114,8 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
               </div>
 
               <button
-                onClick={handleSubmit}
+                type="submit"
                 disabled={isVerifying}
-                type="button"
                 className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transform transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isVerifying ? (
@@ -130,7 +127,7 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
                   <span>Entrar al Tablón</span>
                 )}
               </button>
-            </div>
+            </form>
           </div>
 
           <div className="bg-gray-50 px-8 py-4 border-t border-gray-100 text-center">
