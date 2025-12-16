@@ -1,13 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Lock, Bell } from 'lucide-react';
-
-// Mock auth service for demonstration
-const authService = {
-  verifyAccessPassword: async (password: string) => {
-    // Replace with your actual auth logic
-    return password === 'demo123';
-  }
-};
+import { authService } from '../lib/supabase/auth';
 
 interface PasswordProtectionProps {
   children: React.ReactNode;
