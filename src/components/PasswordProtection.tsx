@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Lock, Bell } from 'lucide-react';
 import { authService } from '../lib/supabase/auth';
 
@@ -9,9 +9,12 @@ interface PasswordProtectionProps {
 export default function PasswordProtection({ children }: PasswordProtectionProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [username] = useState('congregacion');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const isNativeSubmitRef = useRef(false);
 
   useEffect(() => {
     // Simulate splash screen loading time
@@ -22,7 +25,11 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
     return () => clearTimeout(timer);
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    if (isNativeSubmitRef.current) {
+      return;
+    }
+
     e.preventDefault();
     setIsVerifying(true);
     setError('');
@@ -33,6 +40,8 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
     const isValid = await authService.verifyAccessPassword(password);
 
     if (isValid) {
+      isNativeSubmitRef.current = true;
+      formRef.current?.submit();
       setIsAuthenticated(true);
     } else {
       setError('Contraseña incorrecta');
@@ -75,13 +84,20 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
           </div>
 
           <div className="p-8">
-            <form onSubmit={handleSubmit} method="post" action="" className="space-y-6">
-              {/* Hidden form element for Safari password manager */}
-              <div style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }}>
-                <input type="text" name="fakeusername" autoComplete="username" tabIndex={-1} />
-                <input type="password" name="fakepassword" autoComplete="current-password" tabIndex={-1} />
-              </div>
-
+            <form
+              ref={formRef}
+              onSubmit={handleSubmit}
+              method="post"
+              action="/api/login"
+              target="password-save-frame"
+              autoComplete="on"
+              className="space-y-6"
+            >
+              <iframe
+                name="password-save-frame"
+                title="Password save frame"
+                className="hidden"
+              />
               {/* Visible username field with fixed value - required for password managers */}
               <div>
                 <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
@@ -92,10 +108,14 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
                   id="username"
                   name="username"
                   autoComplete="username"
-                  value="congregacion"
+                  value={username}
                   readOnly
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-default"
-                  tabIndex={-1}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                  inputMode="text"
+                  placeholder="congregacion"
                 />
               </div>
 
@@ -110,6 +130,9 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  inputMode="text"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="••••••••"
                   autoFocus
