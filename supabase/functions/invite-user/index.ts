@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const validRoles = ['admin', 'editor', 'congregante'];
+    const validRoles = ['admin', 'editor', 'publicador'];
     if (!validRoles.includes(role)) {
       return new Response(JSON.stringify({ error: 'Rol inválido' }), {
         status: 400,

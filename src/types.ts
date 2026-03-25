@@ -26,7 +26,7 @@ export interface AdminPanelState {
   currentAnnouncement: Announcement | null;
 }
 
-export type UserRole = 'admin' | 'editor' | 'congregante';
+export type UserRole = 'admin' | 'editor' | 'publicador';
 
 export interface Profile {
   id: string;

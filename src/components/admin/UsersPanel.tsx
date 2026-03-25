@@ -7,13 +7,13 @@ import type { Profile, UserRole } from '../../types';
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Admin',
   editor: 'Editor',
-  congregante: 'Congregante',
+  publicador: 'Publicador',
 };
 
 const ROLE_COLORS: Record<UserRole, string> = {
   admin: 'bg-red-100 text-red-700',
   editor: 'bg-blue-100 text-blue-700',
-  congregante: 'bg-gray-100 text-gray-700',
+  publicador: 'bg-gray-100 text-gray-700',
 };
 
 export default function UsersPanel() {
@@ -22,7 +22,7 @@ export default function UsersPanel() {
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
-  const [inviteRole, setInviteRole] = useState<UserRole>('congregante');
+  const [inviteRole, setInviteRole] = useState<UserRole>('publicador');
   const [inviteStatus, setInviteStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [inviteError, setInviteError] = useState('');
   const [sentEmail, setSentEmail] = useState('');
@@ -84,7 +84,7 @@ export default function UsersPanel() {
       setInviteStatus('sent');
       setInviteEmail('');
       setInviteName('');
-      setInviteRole('congregante');
+      setInviteRole('publicador');
       await loadProfiles();
     } catch (err: any) {
       setInviteStatus('error');
@@ -99,7 +99,7 @@ export default function UsersPanel() {
     setSentEmail('');
     setInviteEmail('');
     setInviteName('');
-    setInviteRole('congregante');
+    setInviteRole('publicador');
   };
 
   return (
@@ -170,7 +170,7 @@ export default function UsersPanel() {
                   onChange={e => setInviteRole(e.target.value as UserRole)}
                   className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="congregante">Congregante</option>
+                  <option value="publicador">Congregante</option>
                   <option value="editor">Editor</option>
                   <option value="admin">Admin</option>
                 </select>
@@ -223,7 +223,7 @@ export default function UsersPanel() {
                     className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     aria-label="Cambiar rol"
                   >
-                    <option value="congregante">Congregante</option>
+                    <option value="publicador">Congregante</option>
                     <option value="editor">Editor</option>
                     <option value="admin">Admin</option>
                   </select>
