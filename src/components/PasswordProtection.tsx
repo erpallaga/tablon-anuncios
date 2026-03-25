@@ -2,6 +2,12 @@ import { useState, useEffect } from 'react';
 import { Lock, Bell } from 'lucide-react';
 import { authService } from '../lib/supabase/auth';
 
+declare global {
+  interface Window {
+    PasswordCredential?: new (data: { id: string; password: string }) => Credential;
+  }
+}
+
 interface PasswordProtectionProps {
   children: React.ReactNode;
 }
@@ -33,6 +39,18 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
     const isValid = await authService.verifyAccessPassword(password);
 
     if (isValid) {
+      // Signal to browser password manager (Safari, Chrome) to save the credential
+      if (window.PasswordCredential) {
+        try {
+          const credential = new window.PasswordCredential({
+            id: 'congregacion',
+            password,
+          });
+          await navigator.credentials.store(credential);
+        } catch {
+          // Credential API not supported or denied — continue anyway
+        }
+      }
       setIsAuthenticated(true);
     } else {
       setError('Contraseña incorrecta');
@@ -76,12 +94,6 @@ export default function PasswordProtection({ children }: PasswordProtectionProps
 
           <div className="p-8">
             <form onSubmit={handleSubmit} method="post" action="" className="space-y-6">
-              {/* Hidden form element for Safari password manager */}
-              <div style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }}>
-                <input type="text" name="fakeusername" autoComplete="username" tabIndex={-1} />
-                <input type="password" name="fakepassword" autoComplete="current-password" tabIndex={-1} />
-              </div>
-
               {/* Visible username field with fixed value - required for password managers */}
               <div>
                 <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
