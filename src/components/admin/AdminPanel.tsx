@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { ArrowLeft, Plus, Edit2, Trash2, Bell, Grid, X, ChevronUp, ChevronDown, Copy, GripVertical } from 'lucide-react';
+import { ArrowLeft, Plus, Edit2, Trash2, Bell, Grid, X, ChevronUp, ChevronDown, Copy, GripVertical, Users } from 'lucide-react';
+import { useAuthContext } from '../../context/AuthContext';
+import UsersPanel from './UsersPanel';
 import {
   DndContext,
   closestCenter,
@@ -222,7 +224,9 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
     deleteAnnouncement,
   } = useAppContext();
 
-  const [activeTab, setActiveTab] = useState<'grid' | 'announcements'>('grid');
+  const { userRole } = useAuthContext();
+
+  const [activeTab, setActiveTab] = useState<'grid' | 'announcements' | 'users'>('grid');
   const [editingItem, setEditingItem] = useState<GridItem | null>(null);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [showGridItemForm, setShowGridItemForm] = useState(false);
@@ -480,6 +484,18 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
                 <Bell className="w-5 h-5 mr-2" />
                 Anuncios
               </button>
+              {userRole === 'admin' && (
+                <button
+                  onClick={() => setActiveTab('users')}
+                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'users'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                >
+                  <Users className="w-5 h-5 mr-2" />
+                  Usuarios
+                </button>
+              )}
             </nav>
           </div>
         </div>
@@ -487,7 +503,9 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {activeTab === 'grid' ? (
+        {activeTab === 'users' ? (
+          <UsersPanel />
+        ) : activeTab === 'grid' ? (
           <div>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-lg font-medium text-gray-900">Elementos del Tablón</h2>

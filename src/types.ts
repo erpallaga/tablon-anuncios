@@ -25,3 +25,15 @@ export interface AdminPanelState {
   currentItem: GridItem | null;
   currentAnnouncement: Announcement | null;
 }
+
+export type UserRole = 'admin' | 'editor' | 'congregante';
+
+export interface Profile {
+  id: string;
+  displayName: string;
+  email: string;
+  role: UserRole;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
