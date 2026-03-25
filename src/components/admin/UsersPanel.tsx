@@ -25,6 +25,7 @@ export default function UsersPanel() {
   const [inviteRole, setInviteRole] = useState<UserRole>('congregante');
   const [inviteStatus, setInviteStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [inviteError, setInviteError] = useState('');
+  const [sentEmail, setSentEmail] = useState('');
 
   const loadProfiles = async () => {
     try {
@@ -66,12 +67,20 @@ export default function UsersPanel() {
     setInviteError('');
 
     try {
-      const { error } = await supabase.functions.invoke('invite-user', {
+      const { data, error } = await supabase.functions.invoke('invite-user', {
         body: { email: inviteEmail, displayName: inviteName, role: inviteRole },
       });
 
-      if (error) throw error;
+      if (error) {
+        // For non-2xx responses, the body with our error message is in `data`
+        const msg = data?.error || error.message;
+        if (msg?.toLowerCase().includes('rate limit')) {
+          throw new Error('Demasiados emails enviados. Espera unos minutos e inténtalo de nuevo.');
+        }
+        throw new Error(msg || 'Error al invitar al usuario.');
+      }
 
+      setSentEmail(inviteEmail);
       setInviteStatus('sent');
       setInviteEmail('');
       setInviteName('');
@@ -87,6 +96,7 @@ export default function UsersPanel() {
     setShowInviteForm(false);
     setInviteStatus('idle');
     setInviteError('');
+    setSentEmail('');
     setInviteEmail('');
     setInviteName('');
     setInviteRole('congregante');
@@ -121,7 +131,7 @@ export default function UsersPanel() {
           {inviteStatus === 'sent' ? (
             <div className="text-center py-2">
               <p className="text-sm text-green-700 font-medium">
-                ✓ Invitación enviada a {inviteEmail}
+                ✓ Invitación enviada a {sentEmail}
               </p>
               <button onClick={resetInviteForm} className="mt-2 text-sm text-blue-600 hover:underline">
                 Invitar otro usuario

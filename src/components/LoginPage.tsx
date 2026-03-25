@@ -34,7 +34,11 @@ export default function LoginPage() {
 
     if (error) {
       setStatus('error');
-      setErrorMsg('Este email no está autorizado. Contacta con el administrador.');
+      if (error.status === 429 || error.message?.toLowerCase().includes('rate limit')) {
+        setErrorMsg('Demasiados intentos. Espera unos minutos e inténtalo de nuevo.');
+      } else {
+        setErrorMsg('Este email no está autorizado. Contacta con el administrador.');
+      }
     } else {
       setStatus('sent');
     }

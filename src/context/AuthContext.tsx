@@ -35,13 +35,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (isMounted) setIsLoading(false);
     });
 
-    // Handle magic link callbacks, sign out, and token refresh
-    const subscription = authService.onAuthStateChange(async (event, newSession) => {
+    // Handle magic link callbacks, sign out, and token refresh.
+    // IMPORTANT: onAuthStateChange callbacks run INSIDE the Supabase auth
+    // lock. Making REST queries (e.g. getOwnProfile) inside the callback
+    // would deadlock because the query needs the same lock to read the
+    // access token. We defer the profile fetch with setTimeout(0) to
+    // break out of the lock context.
+    const subscription = authService.onAuthStateChange((_event, newSession) => {
       if (!isMounted) return;
       setSession(newSession);
       if (newSession) {
-        const p = await profilesService.getOwnProfile(newSession.user.id);
-        if (isMounted) setProfile(p);
+        setTimeout(async () => {
+          if (!isMounted) return;
+          const p = await profilesService.getOwnProfile(newSession.user.id);
+          if (isMounted) setProfile(p);
+        }, 0);
       } else {
         setProfile(null);
       }
