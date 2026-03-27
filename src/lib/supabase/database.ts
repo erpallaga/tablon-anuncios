@@ -1,4 +1,4 @@
-import { supabase } from './client';
+import { supabase, supabaseAnon } from './client';
 import type { GridItem, Announcement } from '../../types';
 
 // Helper to convert database row to GridItem
@@ -28,7 +28,7 @@ function mapAnnouncement(row: any): Announcement {
 // GridItems operations
 export const gridItemsService = {
   async getAll(): Promise<GridItem[]> {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAnon
       .from('grid_items')
       .select('*')
       .order('order', { ascending: true });
@@ -84,7 +84,7 @@ export const gridItemsService = {
 // Announcements operations
 export const announcementsService = {
   async getAll(): Promise<Announcement[]> {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAnon
       .from('announcements')
       .select('*')
       .order('order', { ascending: true });
