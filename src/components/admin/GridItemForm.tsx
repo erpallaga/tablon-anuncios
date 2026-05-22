@@ -29,7 +29,7 @@ const EMOJIS = [
 
 export default function GridItemForm({ item, onSave, onCancel, isNew = false }: GridItemFormProps) {
   const [formData, setFormData] = useState<Omit<GridItem, 'id' | 'order'>>(
-    item || { title: '', icon: '📄', fileUrl: '' }
+    item || { title: '', icon: '📄', fileUrl: '', fileType: undefined }
   );
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -61,6 +61,10 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
         return;
       }
       setSelectedFile(file);
+      setFormData(prev => ({
+        ...prev,
+        fileType: file.type.startsWith('image/') ? 'image' : 'pdf',
+      }));
       setError('');
     }
   };
@@ -194,7 +198,7 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
                 )}
               </div>
             ) : (
-              <div>
+              <div className="space-y-3">
                 <input
                   type="text"
                   name="fileUrl"
@@ -204,9 +208,29 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required={!useFileUpload}
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  URL completa del archivo (PDF o imagen, puede ser de Supabase o externa)
-                </p>
+                <div className="flex items-center gap-4">
+                  <span className="text-xs text-gray-500">Tipo:</span>
+                  <label className="flex items-center gap-1.5 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="fileType"
+                      value="pdf"
+                      checked={formData.fileType === 'pdf' || formData.fileType === undefined}
+                      onChange={() => setFormData(prev => ({ ...prev, fileType: 'pdf' }))}
+                    />
+                    PDF
+                  </label>
+                  <label className="flex items-center gap-1.5 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="fileType"
+                      value="image"
+                      checked={formData.fileType === 'image'}
+                      onChange={() => setFormData(prev => ({ ...prev, fileType: 'image' }))}
+                    />
+                    Imagen
+                  </label>
+                </div>
               </div>
             )}
 

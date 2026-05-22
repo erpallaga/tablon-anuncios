@@ -12,12 +12,14 @@ function isImage(url: string): boolean {
 
 interface PDFViewerProps {
   fileUrl: string;
+  fileType?: 'pdf' | 'image';
   title: string;
   icon?: React.ReactNode;
   onClose: () => void;
 }
 
-export default function PDFViewer({ fileUrl, title, icon, onClose }: PDFViewerProps) {
+export default function PDFViewer({ fileUrl, fileType, title, icon, onClose }: PDFViewerProps) {
+  const showAsImage = fileType === 'image' || (fileType === undefined && isImage(fileUrl));
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -184,7 +186,7 @@ export default function PDFViewer({ fileUrl, title, icon, onClose }: PDFViewerPr
             transition: isDragging ? "none" : "transform 0.05s linear",
           }}
         >
-          {isImage(fileUrl) ? (
+          {showAsImage ? (
             <img
               src={fileUrl}
               alt={title}

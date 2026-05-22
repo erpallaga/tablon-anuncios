@@ -267,6 +267,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
           title: item.title,
           icon: item.icon,
           fileUrl: item.fileUrl,
+          fileType: item.fileType,
           order: index,
         });
       });
@@ -350,7 +351,8 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
         title: item.title,
         icon: item.icon,
         fileUrl: item.fileUrl,
-        order: item.order
+        fileType: item.fileType,
+        order: item.order,
       });
     });
   };
