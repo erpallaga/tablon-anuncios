@@ -7,7 +7,8 @@ function mapGridItem(row: any): GridItem {
     id: row.id,
     title: row.title,
     icon: row.icon,
-    pdfUrl: row.pdf_url,
+    fileUrl: row.pdf_url,
+    fileType: row.file_type ?? undefined,
     order: row.order ?? 0,
   };
 }
@@ -43,7 +44,8 @@ export const gridItemsService = {
       .insert([{
         title: item.title,
         icon: item.icon,
-        pdf_url: item.pdfUrl,
+        pdf_url: item.fileUrl,
+        file_type: item.fileType ?? null,
         order: item.order ?? 0,
       }])
       .select()
@@ -57,7 +59,8 @@ export const gridItemsService = {
     const updateData: any = {};
     if (updates.title !== undefined) updateData.title = updates.title;
     if (updates.icon !== undefined) updateData.icon = updates.icon;
-    if (updates.pdfUrl !== undefined) updateData.pdf_url = updates.pdfUrl;
+    if (updates.fileUrl !== undefined) updateData.pdf_url = updates.fileUrl;
+    if (updates.fileType !== undefined) updateData.file_type = updates.fileType;
     if (updates.order !== undefined) updateData.order = updates.order;
 
     const { data, error } = await supabase

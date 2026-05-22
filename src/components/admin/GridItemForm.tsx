@@ -29,7 +29,7 @@ const EMOJIS = [
 
 export default function GridItemForm({ item, onSave, onCancel, isNew = false }: GridItemFormProps) {
   const [formData, setFormData] = useState<Omit<GridItem, 'id' | 'order'>>(
-    item || { title: '', icon: '📄', pdfUrl: '' }
+    item || { title: '', icon: '📄', fileUrl: '', fileType: undefined }
   );
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -51,14 +51,20 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
     }));
   };
 
+  const ACCEPTED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.type !== 'application/pdf') {
-        setError('Por favor selecciona un archivo PDF');
+      if (!ACCEPTED_TYPES.includes(file.type)) {
+        setError('Por favor selecciona un PDF o una imagen (JPG, PNG, GIF, WEBP, SVG)');
         return;
       }
       setSelectedFile(file);
+      setFormData(prev => ({
+        ...prev,
+        fileType: file.type.startsWith('image/') ? 'image' : 'pdf',
+      }));
       setError('');
     }
   };
@@ -68,20 +74,16 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
     setError('');
 
     try {
-      let pdfUrl = formData.pdfUrl;
+      let fileUrl = formData.fileUrl;
 
-      // If uploading a new file
       if (useFileUpload && selectedFile) {
         setUploading(true);
-        pdfUrl = await storageService.uploadPDF(selectedFile, selectedFile.name);
+        fileUrl = await storageService.uploadFile(selectedFile, selectedFile.name);
       }
-
-      // If editing and deleting old file, we'd need to track the old URL
-      // For simplicity, we'll skip that for now - just upload new file
 
       await onSave({
         ...formData,
-        pdfUrl,
+        fileUrl,
       });
     } catch (err: any) {
       console.error('Error saving grid item:', err);
@@ -154,7 +156,7 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
                   onChange={() => setUseFileUpload(true)}
                   className="text-blue-600"
                 />
-                Subir archivo PDF
+                Subir archivo
               </label>
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <input
@@ -163,14 +165,14 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
                   onChange={() => setUseFileUpload(false)}
                   className="text-blue-600"
                 />
-                URL del PDF
+                URL del archivo
               </label>
             </div>
 
             {useFileUpload ? (
               <div>
-                <label 
-                  htmlFor="pdf-upload"
+                <label
+                  htmlFor="file-upload"
                   className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100"
                 >
                   <div className="flex flex-col items-center justify-center pt-5 pb-6">
@@ -178,13 +180,13 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
                     <p className="mb-2 text-sm text-gray-500">
                       <span className="font-semibold">Clic para subir</span> o arrastra el archivo
                     </p>
-                    <p className="text-xs text-gray-500">PDF únicamente</p>
+                    <p className="text-xs text-gray-500">PDF, JPG, PNG, GIF, WEBP, SVG</p>
                   </div>
                   <input
-                    id="pdf-upload"
+                    id="file-upload"
                     type="file"
                     className="hidden"
-                    accept=".pdf,application/pdf"
+                    accept=".pdf,application/pdf,.jpg,.jpeg,.png,.gif,.webp,.svg,image/*"
                     onChange={handleFileChange}
                     disabled={uploading}
                   />
@@ -196,19 +198,39 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
                 )}
               </div>
             ) : (
-              <div>
+              <div className="space-y-3">
                 <input
                   type="text"
-                  name="pdfUrl"
-                  value={formData.pdfUrl}
+                  name="fileUrl"
+                  value={formData.fileUrl}
                   onChange={handleChange}
-                  placeholder="https://ejemplo.com/documento.pdf o URL de Supabase"
+                  placeholder="https://ejemplo.com/archivo.pdf o URL de imagen"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required={!useFileUpload}
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  URL completa del PDF (puede ser de Supabase o externa)
-                </p>
+                <div className="flex items-center gap-4">
+                  <span className="text-xs text-gray-500">Tipo:</span>
+                  <label className="flex items-center gap-1.5 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="fileType"
+                      value="pdf"
+                      checked={formData.fileType === 'pdf' || formData.fileType === undefined}
+                      onChange={() => setFormData(prev => ({ ...prev, fileType: 'pdf' }))}
+                    />
+                    PDF
+                  </label>
+                  <label className="flex items-center gap-1.5 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="fileType"
+                      value="image"
+                      checked={formData.fileType === 'image'}
+                      onChange={() => setFormData(prev => ({ ...prev, fileType: 'image' }))}
+                    />
+                    Imagen
+                  </label>
+                </div>
               </div>
             )}
 
