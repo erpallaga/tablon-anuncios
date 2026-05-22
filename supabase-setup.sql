@@ -7,10 +7,14 @@ CREATE TABLE IF NOT EXISTS grid_items (
   title TEXT NOT NULL,
   icon TEXT NOT NULL,
   pdf_url TEXT NOT NULL,
+  file_type TEXT,
   "order" INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration for existing databases: add file_type if the table predates it
+ALTER TABLE grid_items ADD COLUMN IF NOT EXISTS file_type TEXT;
 
 -- Create announcements table
 CREATE TABLE IF NOT EXISTS announcements (
