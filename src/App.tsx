@@ -67,7 +67,7 @@ function App() {
         {selectedItem ? (
           <div className="fixed inset-0 z-50">
             <PDFViewer
-              pdfUrl={selectedItem.pdfUrl}
+              fileUrl={selectedItem.fileUrl}
               title={selectedItem.title}
               icon={selectedItem.icon}
               onClose={handleGoHome}

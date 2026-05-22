@@ -101,7 +101,7 @@ function SortableGridItem({ item, index, totalItems, onEdit, onDuplicate, onDele
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-900">{item.title}</p>
           <p className="text-sm text-gray-500 truncate">
-            {getFilenameFromUrl(item.pdfUrl)}
+            {getFilenameFromUrl(item.fileUrl)}
           </p>
         </div>
 
@@ -266,7 +266,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
         updateGridItem(item.id, {
           title: item.title,
           icon: item.icon,
-          pdfUrl: item.pdfUrl,
+          pdfUrl: item.fileUrl,
           order: index,
         });
       });
@@ -349,7 +349,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
       updateGridItem(item.id, {
         title: item.title,
         icon: item.icon,
-        pdfUrl: item.pdfUrl,
+        pdfUrl: item.fileUrl,
         order: item.order
       });
     });

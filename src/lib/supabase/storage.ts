@@ -3,13 +3,7 @@ import { supabase } from './client';
 const BUCKET_NAME = 'pdfs';
 
 export const storageService = {
-  /**
-   * Upload a PDF file to Supabase storage
-   * @param file The PDF file to upload
-   * @param fileName Optional custom file name. If not provided, uses the file's name
-   * @returns The public URL of the uploaded file
-   */
-  async uploadPDF(file: File, fileName?: string): Promise<string> {
+  async uploadFile(file: File, fileName?: string): Promise<string> {
     const fileExt = file.name.split('.').pop();
     const filePath = fileName || `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
@@ -30,11 +24,7 @@ export const storageService = {
     return publicUrl;
   },
 
-  /**
-   * Delete a PDF file from Supabase storage
-   * @param filePath The path of the file to delete
-   */
-  async deletePDF(filePath: string): Promise<void> {
+  async deleteFile(filePath: string): Promise<void> {
     // Extract the path from a full URL if needed
     const path = filePath.includes('/storage/v1/object/public/') 
       ? filePath.split('/storage/v1/object/public/')[1].replace(`${BUCKET_NAME}/`, '')

@@ -4,14 +4,20 @@ import { ZoomIn, ZoomOut, RotateCw } from "lucide-react";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
+const IMAGE_EXTENSIONS = /\.(jpe?g|png|gif|webp|svg)(\?|$)/i;
+
+function isImage(url: string): boolean {
+  return IMAGE_EXTENSIONS.test(url);
+}
+
 interface PDFViewerProps {
-  pdfUrl: string;
+  fileUrl: string;
   title: string;
   icon?: React.ReactNode;
   onClose: () => void;
 }
 
-export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerProps) {
+export default function PDFViewer({ fileUrl, title, icon, onClose }: PDFViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -178,19 +184,28 @@ export default function PDFViewer({ pdfUrl, title, icon, onClose }: PDFViewerPro
             transition: isDragging ? "none" : "transform 0.05s linear",
           }}
         >
-          <Document
-            file={pdfUrl}
-            loading={<div className="text-white">Loading PDF…</div>}
-            onLoadSuccess={({ numPages }) => setNumPages(numPages)}
-          >
-            <Page
-              pageNumber={currentPage}
-              renderTextLayer={false}
-              renderAnnotationLayer={false}
-              width={Math.min(1000, window.innerWidth * 0.9)}
-              scale={1.5}
+          {isImage(fileUrl) ? (
+            <img
+              src={fileUrl}
+              alt={title}
+              draggable={false}
+              style={{ maxWidth: Math.min(1000, window.innerWidth * 0.9), height: "auto", display: "block" }}
             />
-          </Document>
+          ) : (
+            <Document
+              file={fileUrl}
+              loading={<div className="text-white">Cargando…</div>}
+              onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+            >
+              <Page
+                pageNumber={currentPage}
+                renderTextLayer={false}
+                renderAnnotationLayer={false}
+                width={Math.min(1000, window.innerWidth * 0.9)}
+                scale={1.5}
+              />
+            </Document>
+          )}
         </div>
       </div>
     </div>

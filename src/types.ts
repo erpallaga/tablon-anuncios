@@ -2,7 +2,7 @@ export interface GridItem {
   id: string;
   title: string;
   icon: string;
-  pdfUrl: string;
+  fileUrl: string;
   order?: number; // Hacer opcional para permitir la creación sin especificar order
 }
 
