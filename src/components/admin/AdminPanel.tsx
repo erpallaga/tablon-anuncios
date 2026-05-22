@@ -266,7 +266,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
         updateGridItem(item.id, {
           title: item.title,
           icon: item.icon,
-          pdfUrl: item.fileUrl,
+          fileUrl: item.fileUrl,
           order: index,
         });
       });
@@ -349,7 +349,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
       updateGridItem(item.id, {
         title: item.title,
         icon: item.icon,
-        pdfUrl: item.fileUrl,
+        fileUrl: item.fileUrl,
         order: item.order
       });
     });
