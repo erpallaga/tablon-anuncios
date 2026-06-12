@@ -12,6 +12,7 @@ export const storageService = {
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false,
+        contentType: file.type,
       });
 
     if (error) throw error;
