@@ -172,6 +172,60 @@ CREATE TABLE IF NOT EXISTS extracted_assignments (
 3. **Fase 3**: soporte de más formatos de cuadrante — un "perfil de extracción" por tipo de
    documento (prompt + esquema + validaciones propios), seleccionable al subir el archivo.
 
+## Despliegue (Fase 1)
+
+La Fase 1 está implementada en este repositorio:
+
+- `supabase-assignments-setup.sql` — migración (columnas `profiles.aliases` y
+  `grid_items.extract_assignments`, tabla `extracted_assignments` con RLS).
+- `supabase/functions/extract-assignments/` — Edge Function completa.
+- Frontend — checkbox "📅 Cuadrante RSC de asignaciones" al crear un elemento.
+
+Pasos para activarla:
+
+1. **Migración SQL**: ejecutar `supabase-assignments-setup.sql` en el SQL Editor de Supabase.
+
+2. **Secrets de la función**:
+   ```bash
+   supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+   supabase secrets set RESEND_API_KEY=re_...
+   supabase secrets set WEBHOOK_SECRET=<cadena aleatoria larga>
+   # Opcionales:
+   # supabase secrets set ANTHROPIC_MODEL=claude-haiku-4-5
+   # supabase secrets set RESEND_FROM="Tablón <avisos@tudominio.com>"
+   # supabase secrets set ASSIGNMENT_DURATION_MINUTES=60
+   ```
+   La API key de Anthropic se crea en console.anthropic.com (requiere cargar un
+   mínimo de saldo; el consumo real será de céntimos). La de Resend en resend.com
+   (gratis hasta 3.000 emails/mes; para enviar a cualquier destinatario hay que
+   verificar un dominio propio — con el dominio de pruebas solo se puede enviar
+   al propio email de la cuenta).
+
+3. **Desplegar la función**:
+   ```bash
+   supabase functions deploy extract-assignments --no-verify-jwt
+   ```
+   (`--no-verify-jwt` porque la llama el webhook, no un usuario; la protección
+   es el header `x-webhook-secret`.)
+
+4. **Crear el webhook**: en el panel de Supabase → Database → Webhooks → Create:
+   - Tabla: `grid_items`, evento: **solo INSERT**
+   - Tipo: HTTP Request, método POST
+   - URL: `https://<project>.supabase.co/functions/v1/extract-assignments`
+   - Headers: `x-webhook-secret: <el mismo WEBHOOK_SECRET>`
+   - Timeout: el máximo disponible (la extracción con doble pasada tarda 20-60 s).
+
+5. **Alias de usuarios** (opcional pero recomendado): si el nombre que aparece en
+   los cuadrantes no coincide con el `display_name` del usuario, añadir alias:
+   ```sql
+   UPDATE profiles SET aliases = ARRAY['Javi Gavidia']
+   WHERE display_name = 'Javier Gavidia';
+   ```
+
+6. **Prueba**: subir el PDF de un mes pasado con el checkbox marcado y comprobar
+   la tabla `extracted_assignments` y los emails. Los logs de la función están en
+   Supabase → Edge Functions → extract-assignments → Logs.
+
 ## Riesgos y mitigaciones
 
 | Riesgo | Mitigación |
