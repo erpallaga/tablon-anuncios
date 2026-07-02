@@ -9,7 +9,7 @@ cuando se sube un nuevo cuadrante (PDF o JPG) y notificarle por email con evento
 |---|---|
 | Formato de documento | Cuadrante mensual RSC ("Reuniones para el Servicio del Campo"), en PDF **y** fotografía JPG |
 | Destinatarios | Solo usuarios registrados en la app (tabla `profiles`) |
-| Canal de notificación | Email con adjunto `.ics` (el usuario lo añade a su calendario con un clic) |
+| Canal de notificación | Email con adjunto `.ics` (el usuario lo añade a su calendario con un clic), vía Brevo (gratis, sin dominio propio) |
 | Revisión humana | Automático **con validaciones**: solo se notifica si todas las comprobaciones deterministas pasan; si algo no cuadra, se marca para revisión y se avisa al editor |
 | Coste objetivo | ~0 €/mes: Supabase free tier + Resend free tier + ~0,03 $ por documento de API de Anthropic |
 
@@ -117,12 +117,14 @@ revisión en vez de notificarse.
 Resultado por asignación en `extracted_assignments.status`:
 `validated` → se notifica; `needs_review` → email al editor con el detalle de qué falló.
 
-**5. Notificación — Resend + .ics**
+**5. Notificación — Brevo + .ics**
 - Un email por usuario y documento, con todas sus asignaciones del mes y un único `.ics` adjunto
   con un `VEVENT` por asignación (título, fecha, hora, lugar). El `.ics` se genera como texto
   plano en la propia función, sin dependencias.
-- Resend free tier: 3.000 emails/mes, 100/día — de sobra. Requiere verificar un dominio propio
-  o usar el dominio de pruebas de Resend.
+- Brevo free tier: 300 emails/día — de sobra. A diferencia de Resend, **no exige dominio
+  propio**: basta verificar una dirección remitente (puede ser un Gmail personal) y ya se
+  puede enviar a cualquier destinatario. La función también soporta Resend (`RESEND_API_KEY`)
+  si algún día se verifica un dominio.
 - Idempotencia: `extracted_assignments.notified_at` evita reenvíos si el webhook se re-dispara
   (p. ej. al editar el grid item). Se recomienda disparar solo en INSERT, no en UPDATE.
 
@@ -164,7 +166,7 @@ CREATE TABLE IF NOT EXISTS extracted_assignments (
 | Concepto | Coste |
 |---|---|
 | Supabase (Edge Function + webhook + tabla) | 0 € (free tier actual) |
-| Resend (emails) | 0 € (≪ 3.000/mes) |
+| Brevo (emails) | 0 € (≪ 300/día) |
 | API Anthropic (Haiku + Sonnet, doble pasada, ~5-10 docs/mes) | ~0,30–0,60 $ |
 | **Total** | **< 1 $/mes** |
 
@@ -193,23 +195,30 @@ Pasos para activarla:
 2. **Secrets de la función**:
    ```bash
    supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
-   supabase secrets set RESEND_API_KEY=re_...
+   supabase secrets set BREVO_API_KEY=xkeysib-...
+   supabase secrets set EMAIL_FROM=<email verificado como sender en Brevo>
    supabase secrets set WEBHOOK_SECRET=<cadena aleatoria larga>
    # Opcionales:
+   # supabase secrets set EMAIL_FROM_NAME="Tablón de Anuncios"
    # supabase secrets set ANTHROPIC_MODEL_PASS_A=claude-haiku-4-5
    # supabase secrets set ANTHROPIC_MODEL_PASS_B=claude-sonnet-4-6
-   # supabase secrets set RESEND_FROM="Tablón <avisos@tudominio.com>"
    # supabase secrets set ASSIGNMENT_DURATION_MINUTES=60
    # Modo beta — solo estos emails reciben notificaciones (la extracción se hace igual):
    # supabase secrets set NOTIFICATION_ALLOWLIST="eric@ejemplo.com,raquel@ejemplo.com"
    ```
    Para abrir el sistema a todos los usuarios cuando termine la beta:
    `supabase secrets unset NOTIFICATION_ALLOWLIST` y volver a desplegar la función.
-   La API key de Anthropic se crea en console.anthropic.com (requiere cargar un
-   mínimo de saldo; el consumo real será de céntimos). La de Resend en resend.com
-   (gratis hasta 3.000 emails/mes; para enviar a cualquier destinatario hay que
-   verificar un dominio propio — con el dominio de pruebas solo se puede enviar
-   al propio email de la cuenta).
+
+   - **API key de Anthropic**: console.anthropic.com (requiere cargar un mínimo de
+     saldo; el consumo real será de céntimos al mes).
+   - **Brevo** (gratis, 300 emails/día, sin dominio propio): crear cuenta en
+     brevo.com → *Senders, Domains & Dedicated IPs* → *Senders* → añadir la
+     dirección remitente (vale un Gmail personal) y confirmar el email de
+     verificación → *SMTP & API* → generar una API key. `EMAIL_FROM` debe ser
+     exactamente esa dirección verificada. Nota: los destinatarios pueden ver el
+     email como enviado "via brevo.com"; si algún día se quiere quitar eso y
+     mejorar la entregabilidad, la vía es verificar un dominio propio (en Brevo
+     o con Resend).
 
 3. **Desplegar la función**:
    ```bash

@@ -9,12 +9,15 @@
 // Ver docs/automatizacion-asignaciones.md para la arquitectura completa.
 //
 // Secrets requeridos (supabase secrets set):
-//   ANTHROPIC_API_KEY, RESEND_API_KEY
+//   ANTHROPIC_API_KEY
+//   BREVO_API_KEY (o RESEND_API_KEY; si están ambos, se usa Brevo)
+//   EMAIL_FROM (remitente; en Brevo debe ser una dirección verificada como
+//     "sender" en la cuenta — puede ser un Gmail personal, sin dominio propio)
 // Opcionales:
+//   EMAIL_FROM_NAME (default: "Tablón de Anuncios")
 //   ANTHROPIC_MODEL_PASS_A (default: claude-haiku-4-5)
 //   ANTHROPIC_MODEL_PASS_B (default: claude-sonnet-4-6; debe ser un modelo
 //     DISTINTO al de la pasada A para que los sesgos de lectura sean independientes)
-//   RESEND_FROM (default: "Tablón de Anuncios <onboarding@resend.dev>")
 //   WEBHOOK_SECRET (si se define, el webhook debe enviar el header x-webhook-secret)
 //   ASSIGNMENT_DURATION_MINUTES (default: 60)
 //   NOTIFICATION_ALLOWLIST (emails separados por comas; si se define, solo esos
@@ -222,27 +225,61 @@ function buildIcs(
   return lines.join('\r\n');
 }
 
-async function sendEmail(
-  resendKey: string,
-  from: string,
+type SendEmail = (
   to: string,
   subject: string,
   html: string,
   icsContent?: string,
   icsFilename?: string,
-): Promise<void> {
-  const body: Record<string, unknown> = { from, to: [to], subject, html };
-  if (icsContent && icsFilename) {
-    body.attachments = [{ filename: icsFilename, content: encodeBase64(new TextEncoder().encode(icsContent)) }];
+) => Promise<void>;
+
+// Proveedor de email: Brevo (gratis, sin dominio propio — basta verificar la
+// dirección remitente en la cuenta) o Resend (requiere dominio verificado para
+// enviar a terceros). Si ambos secrets existen, se usa Brevo.
+function makeSendEmail(): SendEmail {
+  const brevoKey = Deno.env.get('BREVO_API_KEY');
+  const resendKey = Deno.env.get('RESEND_API_KEY');
+  const fromEmail = Deno.env.get('EMAIL_FROM');
+  const fromName = Deno.env.get('EMAIL_FROM_NAME') ?? 'Tablón de Anuncios';
+
+  if (brevoKey) {
+    if (!fromEmail) throw new Error('Con BREVO_API_KEY es obligatorio definir EMAIL_FROM (remitente verificado en Brevo)');
+    return async (to, subject, html, icsContent, icsFilename) => {
+      const body: Record<string, unknown> = {
+        sender: { email: fromEmail, name: fromName },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      };
+      if (icsContent && icsFilename) {
+        body.attachment = [{ name: icsFilename, content: encodeBase64(new TextEncoder().encode(icsContent)) }];
+      }
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: { 'api-key': brevoKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`Brevo ${res.status}: ${await res.text()}`);
+    };
   }
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    throw new Error(`Resend ${res.status}: ${await res.text()}`);
+
+  if (resendKey) {
+    const from = fromEmail ? `${fromName} <${fromEmail}>` : 'Tablón de Anuncios <onboarding@resend.dev>';
+    return async (to, subject, html, icsContent, icsFilename) => {
+      const body: Record<string, unknown> = { from, to: [to], subject, html };
+      if (icsContent && icsFilename) {
+        body.attachments = [{ filename: icsFilename, content: encodeBase64(new TextEncoder().encode(icsContent)) }];
+      }
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
+    };
   }
+
+  throw new Error('Falta BREVO_API_KEY o RESEND_API_KEY');
 }
 
 Deno.serve(async (req) => {
@@ -442,8 +479,7 @@ Deno.serve(async (req) => {
     if (insertError) throw insertError;
 
     // ── Notificaciones ──────────────────────────────────────────────────────
-    const resendKey = Deno.env.get('RESEND_API_KEY')!;
-    const from = Deno.env.get('RESEND_FROM') ?? 'Tablón de Anuncios <onboarding@resend.dev>';
+    const sendEmail = makeSendEmail();
     const durationMinutes = parseInt(Deno.env.get('ASSIGNMENT_DURATION_MINUTES') ?? '60', 10);
     const monthLabel = `${SPANISH_MONTHS[month - 1] ?? month} ${year}`;
     const profileById = new Map(roster.map((p) => [p.id, p]));
@@ -497,7 +533,7 @@ Deno.serve(async (req) => {
 
       try {
         await sendEmail(
-          resendKey, from, profile.email,
+          profile.email,
           `Tus asignaciones de ${monthLabel}`,
           html, ics, `asignaciones-${year}-${String(month).padStart(2, '0')}.ics`,
         );
@@ -523,7 +559,7 @@ Deno.serve(async (req) => {
         <p>Resumen: ${validated.length} validadas, ${notifiedCount} notificadas${skippedByAllowlist > 0 ? ` (${skippedByAllowlist} omitidas por el modo beta)` : ''}, ${needsReview.length} en revisión.</p>`;
       for (const editor of editors) {
         try {
-          await sendEmail(resendKey, from, editor.email, `Revisión necesaria: cuadrante "${record.title}"`, reviewHtml);
+          await sendEmail(editor.email, `Revisión necesaria: cuadrante "${record.title}"`, reviewHtml);
         } catch (err) {
           console.error(`Error avisando a ${editor.email}:`, err);
         }
