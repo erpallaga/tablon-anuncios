@@ -11,7 +11,9 @@
 // Secrets requeridos (supabase secrets set):
 //   ANTHROPIC_API_KEY, RESEND_API_KEY
 // Opcionales:
-//   ANTHROPIC_MODEL (default: claude-haiku-4-5)
+//   ANTHROPIC_MODEL_PASS_A (default: claude-haiku-4-5)
+//   ANTHROPIC_MODEL_PASS_B (default: claude-sonnet-4-6; debe ser un modelo
+//     DISTINTO al de la pasada A para que los sesgos de lectura sean independientes)
 //   RESEND_FROM (default: "Tablón de Anuncios <onboarding@resend.dev>")
 //   WEBHOOK_SECRET (si se define, el webhook debe enviar el header x-webhook-secret)
 //   ASSIGNMENT_DURATION_MINUTES (default: 60)
@@ -142,6 +144,12 @@ Extrae TODAS las reuniones del mes, celda por celda, fila por fila. Para cada re
 - name_literal es el nombre EXACTAMENTE como está escrito.
 - name_roster es el nombre equivalente de la lista permitida; si ninguno corresponde con claridad, usa NO_ROSTER. No adivines.
 - Si una reunión aparece como "Se cancela", inclúyela con cancelled=true y name_literal vacío.
+
+Método de trabajo, síguelo estrictamente:
+1. Localiza la cuadrícula del calendario y sus columnas (lunes a domingo).
+2. Recorre las semanas fila por fila y, dentro de cada semana, las celdas columna por columna.
+3. Para cada celda, determina el día del mes por el NÚMERO escrito en esa celda (no por conteo), y el día de la semana por la COLUMNA en la que está. Ambos deben ser coherentes; si no lo son, revisa tu lectura de esa celda antes de continuar.
+4. Asocia cada hora/lugar/conductor únicamente con el contenido de SU celda. No arrastres nombres de celdas vecinas.
 
 Sé exhaustivo: no omitas ninguna reunión ni inventes ninguna. Si una celda no tiene reuniones, no produzcas nada para ella.`;
 
@@ -313,12 +321,20 @@ Deno.serve(async (req) => {
       fileBlock = { type: 'image', source: { type: 'base64', media_type: mediaType, data: fileB64 } };
     }
 
-    // ── Doble pasada de extracción ──────────────────────────────────────────
+    // ── Doble pasada de extracción con DOS MODELOS DISTINTOS ────────────────
+    // Un mismo modelo puede repetir el mismo sesgo de lectura en las dos pasadas
+    // (p. ej. desplazar una columna toda la tabla, un error internamente coherente
+    // que la validación fecha↔día no puede detectar). Dos modelos diferentes no
+    // comparten sesgos: solo se valida lo que ambos leen igual, celda a celda.
     const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! });
-    const model = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-haiku-4-5';
-    // Secuencial a propósito: la segunda pasada reutiliza la caché de prompt de la primera
-    const passA = await extractOnce(anthropic, model, fileBlock, rosterNames);
-    const passB = await extractOnce(anthropic, model, fileBlock, rosterNames);
+    const modelA = Deno.env.get('ANTHROPIC_MODEL_PASS_A')
+      ?? Deno.env.get('ANTHROPIC_MODEL')
+      ?? 'claude-haiku-4-5';
+    const modelB = Deno.env.get('ANTHROPIC_MODEL_PASS_B') ?? 'claude-sonnet-4-6';
+    const [passA, passB] = await Promise.all([
+      extractOnce(anthropic, modelA, fileBlock, rosterNames),
+      extractOnce(anthropic, modelB, fileBlock, rosterNames),
+    ]);
 
     // ── Validación determinista ─────────────────────────────────────────────
     const rows: AssignmentRow[] = [];

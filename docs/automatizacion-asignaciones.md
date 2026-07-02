@@ -34,8 +34,12 @@ La solución no es un modelo más grande, sino acotar lo que hace el LLM y hacer
 3. **Vocabulario cerrado**: el esquema JSON estricto (structured outputs) restringe el campo de
    nombre a un `enum` construido con el roster real de la congregación. El modelo no puede
    inventar un nombre.
-4. **Doble pasada**: la extracción se ejecuta dos veces; solo las asignaciones idénticas en ambas
-   pasadas se dan por buenas. Una alucinación tendría que repetirse exactamente igual dos veces.
+4. **Doble pasada con dos modelos distintos** (Haiku 4.5 + Sonnet 4.6 por defecto): solo las
+   asignaciones idénticas en ambas se dan por buenas. Se usan modelos *diferentes* a propósito:
+   un mismo modelo puede repetir el mismo sesgo de lectura en dos pasadas (p. ej. desplazar toda
+   la tabla una columna, un error internamente coherente que la validación fecha↔día no puede
+   detectar); dos modelos distintos no comparten sesgos, así que su coincidencia celda a celda
+   es evidencia fuerte. Donde discrepan → revisión, nunca notificación.
 5. **Matching y validación en código**: la correspondencia nombre→usuario→email y todas las
    comprobaciones (fechas, días de semana, duplicados) se hacen en TypeScript, no en el LLM.
 
@@ -73,10 +77,11 @@ Deno, misma estructura que `invite-user`. Secrets necesarios: `ANTHROPIC_API_KEY
 `RESEND_API_KEY` (via `supabase secrets set`).
 
 **3. Llamada al LLM**
-- Modelo: `claude-haiku-4-5` (1 $/M entrada, 5 $/M salida). Un cuadrante ≈ 5K tokens de entrada
-  + 2K de salida ⇒ ~0,015 $ por pasada, ~0,03 $ con doble pasada. Si en la práctica Haiku no
-  alcanza la fiabilidad deseada con fotos de baja calidad, subir a `claude-sonnet-4-6` (~0,10 $/doc
-  con doble pasada) sigue siendo despreciable.
+- Modelos: pasada A `claude-haiku-4-5` (1 $/M entrada, 5 $/M salida) y pasada B
+  `claude-sonnet-4-6` (3 $/M entrada, 15 $/M salida). Un cuadrante ≈ 5K tokens de entrada
+  + 2K de salida ⇒ ~0,015 $ (Haiku) + ~0,045 $ (Sonnet) ≈ **0,06 $ por documento**.
+  Ambos modelos son configurables por variable de entorno; deben ser distintos entre sí
+  para que la verificación cruzada sea real.
 - Entrada: bloque `document` (PDF base64) o `image` (JPG base64) + prompt con mes/año esperados.
 - Salida forzada con `output_config.format` (json_schema estricto):
 
@@ -160,8 +165,8 @@ CREATE TABLE IF NOT EXISTS extracted_assignments (
 |---|---|
 | Supabase (Edge Function + webhook + tabla) | 0 € (free tier actual) |
 | Resend (emails) | 0 € (≪ 3.000/mes) |
-| API Anthropic (Haiku 4.5, doble pasada, ~5-10 docs/mes) | ~0,15–0,30 $ |
-| **Total** | **< 0,50 $/mes** |
+| API Anthropic (Haiku + Sonnet, doble pasada, ~5-10 docs/mes) | ~0,30–0,60 $ |
+| **Total** | **< 1 $/mes** |
 
 ## Fases de implementación
 
@@ -191,7 +196,8 @@ Pasos para activarla:
    supabase secrets set RESEND_API_KEY=re_...
    supabase secrets set WEBHOOK_SECRET=<cadena aleatoria larga>
    # Opcionales:
-   # supabase secrets set ANTHROPIC_MODEL=claude-haiku-4-5
+   # supabase secrets set ANTHROPIC_MODEL_PASS_A=claude-haiku-4-5
+   # supabase secrets set ANTHROPIC_MODEL_PASS_B=claude-sonnet-4-6
    # supabase secrets set RESEND_FROM="Tablón <avisos@tudominio.com>"
    # supabase secrets set ASSIGNMENT_DURATION_MINUTES=60
    ```
@@ -222,14 +228,19 @@ Pasos para activarla:
    WHERE display_name = 'Javier Gavidia';
    ```
 
-6. **Prueba**: subir el PDF de un mes pasado con el checkbox marcado y comprobar
-   la tabla `extracted_assignments` y los emails. Los logs de la función están en
-   Supabase → Edge Functions → extract-assignments → Logs.
+6. **Prueba con verdad conocida (obligatoria antes de confiar en el sistema)**:
+   subir un cuadrante cuyas asignaciones se conozcan con certeza (p. ej. el del mes
+   en curso) y comparar fila a fila la tabla `extracted_assignments` con el documento
+   real — no solo las propias asignaciones, todas. Repetir con una foto JPG del mismo
+   cuadrante. Solo activar el flujo para la congregación cuando la extracción cuadre
+   al 100 % en estas pruebas. Los logs de la función están en Supabase →
+   Edge Functions → extract-assignments → Logs.
 
 ## Riesgos y mitigaciones
 
 | Riesgo | Mitigación |
 |---|---|
+| Desplazamiento sistemático de columna (asociar un nombre al día contiguo, error internamente coherente) | Doble pasada con **dos modelos distintos**: un sesgo de lectura tendría que repetirse igual en dos modelos independientes. Discrepancia → `needs_review` |
 | Foto JPG torcida/con sombras reduce la fiabilidad | La doble pasada + enum del roster convierten los errores en `needs_review`, nunca en notificaciones falsas |
 | Dos personas con el mismo nombre en el roster | El matching exige unicidad; si un nombre del roster es ambiguo → `needs_review` |
 | Cambio de maquetación del cuadrante en el futuro | Las validaciones (recuento, fechas) fallan en bloque → aviso al editor, no notificaciones erróneas |
