@@ -65,13 +65,10 @@ PDFs are stored in a Supabase Storage bucket named `pdfs`. `storageService` in `
 - **Announcements** — CRUD + reordering; toggling `isActive` shows/hides on the main board
 - **Users** (admin only) — managed via `UsersPanel`, which calls the `invite-user` Supabase Edge Function
 
-### Edge Function
+### Edge Functions
 
-`supabase/functions/invite-user/` — invites a new user via Supabase Admin API and inserts a row in `profiles`. Deploy with:
-
-```bash
-supabase functions deploy invite-user
-```
+- `supabase/functions/invite-user/` — invites a new user via Supabase Admin API and inserts a row in `profiles`. Deploy with `supabase functions deploy invite-user`.
+- `supabase/functions/extract-assignments/` — triggered by a Database Webhook on `grid_items` INSERT. When `extract_assignments` is true, extracts RSC schedule assignments from the PDF/JPG via the Anthropic API (vision + structured outputs, double-pass verification), validates deterministically, stores results in `extracted_assignments` (see `supabase-assignments-setup.sql`), and emails assigned users via Brevo (or Resend) with an `.ics` attachment. Deploy with `supabase functions deploy extract-assignments --no-verify-jwt`. Architecture and setup: `docs/automatizacion-asignaciones.md`.
 
 ### Deployment
 

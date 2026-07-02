@@ -29,7 +29,7 @@ const EMOJIS = [
 
 export default function GridItemForm({ item, onSave, onCancel, isNew = false }: GridItemFormProps) {
   const [formData, setFormData] = useState<Omit<GridItem, 'id' | 'order'>>(
-    item || { title: '', icon: '📄', fileUrl: '', fileType: undefined }
+    item || { title: '', icon: '📄', fileUrl: '', fileType: undefined, extractAssignments: false }
   );
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -238,6 +238,27 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
               <p className="mt-2 text-sm text-red-600">{error}</p>
             )}
           </div>
+
+          {isNew && (
+            <div className="rounded-md bg-blue-50 p-3">
+              <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.extractAssignments ?? false}
+                  onChange={(e) => setFormData(prev => ({ ...prev, extractAssignments: e.target.checked }))}
+                  className="mt-0.5 text-blue-600"
+                />
+                <span>
+                  <span className="font-medium">📅 Cuadrante RSC de asignaciones</span>
+                  <br />
+                  <span className="text-xs text-gray-500">
+                    Al crearlo se analizará el documento y se notificará por email
+                    a los usuarios registrados que tengan asignaciones.
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-4">
             <button

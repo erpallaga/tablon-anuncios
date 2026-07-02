@@ -10,6 +10,7 @@ function mapGridItem(row: any): GridItem {
     fileUrl: row.pdf_url,
     fileType: row.file_type ?? undefined,
     order: row.order ?? 0,
+    extractAssignments: row.extract_assignments ?? false,
   };
 }
 
@@ -47,6 +48,7 @@ export const gridItemsService = {
         pdf_url: item.fileUrl,
         file_type: item.fileType ?? null,
         order: item.order ?? 0,
+        extract_assignments: item.extractAssignments ?? false,
       }])
       .select()
       .single();
@@ -62,6 +64,7 @@ export const gridItemsService = {
     if (updates.fileUrl !== undefined) updateData.pdf_url = updates.fileUrl;
     if (updates.fileType !== undefined) updateData.file_type = updates.fileType;
     if (updates.order !== undefined) updateData.order = updates.order;
+    if (updates.extractAssignments !== undefined) updateData.extract_assignments = updates.extractAssignments;
 
     const { data, error } = await supabase
       .from('grid_items')
