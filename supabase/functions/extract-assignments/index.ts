@@ -73,7 +73,7 @@ interface AssignmentRow {
   assignment_time: string;
   location: string | null;
   name_literal: string;
-  status: 'validated' | 'needs_review';
+  status: 'validated' | 'needs_review' | 'unmatched';
   review_reason: string | null;
 }
 
@@ -96,8 +96,33 @@ function normalizeTime(s: string): string | null {
   return `${String(h).padStart(2, '0')}:${m[2]}`;
 }
 
+// Identidad de una asignación entre pasadas: fecha + hora + nombre. El lugar se
+// compara aparte: una discrepancia de lugar no invalida la asignación (persona y
+// fecha verificadas), solo deja el lugar sin confirmar.
 function entryKey(e: ExtractedEntry): string {
-  return [e.date, normalizeTime(e.time) ?? e.time, normalize(e.name_literal), normalize(e.location)].join('|');
+  return [e.date, normalizeTime(e.time) ?? e.time, normalize(e.name_literal)].join('|');
+}
+
+// Distancia de edición (Levenshtein) para asimilar erratas de nombres:
+// "Erik Pallares" / "Eric Pelleres" → "Eric Pallarés"
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  const m = a.length;
+  const n = b.length;
+  if (m === 0 || n === 0) return m + n;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const curr = [i];
+    for (let j = 1; j <= n; j++) {
+      curr[j] = Math.min(
+        prev[j] + 1,
+        curr[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    prev = curr;
+  }
+  return prev[n];
 }
 
 function buildSchema(rosterNames: string[]) {
@@ -156,6 +181,7 @@ Método de trabajo, síguelo estrictamente:
 2. Recorre las semanas fila por fila y, dentro de cada semana, las celdas columna por columna.
 3. Para cada celda, determina el día del mes por el NÚMERO escrito en esa celda (no por conteo), y el día de la semana por la COLUMNA en la que está. Ambos deben ser coherentes; si no lo son, revisa tu lectura de esa celda antes de continuar.
 4. Asocia cada hora/lugar/conductor únicamente con el contenido de SU celda. No arrastres nombres de celdas vecinas.
+5. Con el LUGAR, cópialo letra a letra de la celda. NO asumas que es el lugar más frecuente del cuadrante: algunas reuniones se celebran en lugares distintos al habitual y es un error grave uniformarlos.
 
 Sé exhaustivo: no omitas ninguna reunión ni inventes ninguna. Si una celda no tiene reuniones, no produzcas nada para ella.`;
 
@@ -420,9 +446,30 @@ async function processRecord(
     const monthValid = month >= 1 && month <= 12 && year >= 2020 && year <= 2100;
 
     const keysB = new Set(activeB.map(entryKey));
+    const locationByKeyB = new Map(activeB.map((e) => [entryKey(e), normalize(e.location ?? '')]));
     const seenKeys = new Set<string>();
 
     const toDateString = (d: number) => `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+    // Asimilación de erratas: busca el nombre del roster más cercano por
+    // distancia de edición. Solo asimila con distancia ≤ 2 y perfil único.
+    const fuzzyResolve = (normLit: string): { profileId: string | null; ambiguous: boolean } => {
+      let best = Infinity;
+      const bestProfiles = new Set<string>();
+      for (const [name, ids] of nameToProfiles) {
+        const d = levenshtein(normLit, name);
+        if (d < best) {
+          best = d;
+          bestProfiles.clear();
+          ids.forEach((id) => bestProfiles.add(id));
+        } else if (d === best) {
+          ids.forEach((id) => bestProfiles.add(id));
+        }
+      }
+      if (best <= 2 && bestProfiles.size === 1) return { profileId: [...bestProfiles][0], ambiguous: false };
+      if (best <= 2 && bestProfiles.size > 1) return { profileId: null, ambiguous: true };
+      return { profileId: null, ambiguous: false };
+    };
 
     for (const e of activeA) {
       const key = entryKey(e);
@@ -430,11 +477,19 @@ async function processRecord(
       seenKeys.add(key);
 
       const time = normalizeTime(e.time);
+
+      // Lugar: solo se da por bueno si ambas pasadas leyeron el mismo. Si
+      // discrepan, la asignación sigue siendo válida (persona/fecha/hora
+      // verificadas) pero el lugar queda sin confirmar (null → el email
+      // remite al cuadrante).
+      const locationB = locationByKeyB.get(key);
+      const locationAgreed = locationB === undefined || normalize(e.location ?? '') === locationB;
+
       const baseRow = {
         grid_item_id: record.id as string,
         assignment_date: toDateString(Math.min(Math.max(e.date, 1), 31)),
         assignment_time: time ?? e.time,
-        location: e.location?.trim() || null,
+        location: locationAgreed ? (e.location?.trim() || null) : null,
         name_literal: e.name_literal.trim(),
       };
 
@@ -458,29 +513,44 @@ async function processRecord(
         problems.push(`El día ${e.date} no cae en ${e.weekday}`);
       }
 
-      // Resolución nombre → perfil
+      // Resolución nombre → perfil:
+      // 1) coincidencia exacta (display_name o alias, normalizados)
+      // 2) asimilación de erratas por distancia de edición ≤ 2 (Erik/Erick/Pelleres…)
+      // 3) mapeo del modelo (name_roster) reforzado con proximidad ≤ 3
+      // 4) si nada aplica → 'unmatched': persona no registrada, se ignora sin avisar
       let profileId: string | null = null;
-      if (e.name_roster === 'NO_ROSTER') {
-        problems.push(`"${e.name_literal}" no corresponde a ningún usuario registrado`);
+      let unmatched = false;
+      const normLit = normalize(e.name_literal);
+      const literalIds = nameToProfiles.get(normLit);
+      if (literalIds && literalIds.size === 1) {
+        profileId = [...literalIds][0];
+      } else if (literalIds && literalIds.size > 1) {
+        problems.push(`Nombre ambiguo en el roster: "${e.name_literal}"`);
       } else {
-        const literalIds = nameToProfiles.get(normalize(e.name_literal));
-        const rosterIds = nameToProfiles.get(normalize(e.name_roster));
-        if (!rosterIds || rosterIds.size === 0) {
-          problems.push(`Nombre fuera del roster: "${e.name_roster}"`);
-        } else if (rosterIds.size > 1) {
-          problems.push(`Nombre ambiguo en el roster: "${e.name_roster}"`);
-        } else if (literalIds && !literalIds.has([...rosterIds][0])) {
-          problems.push(`El nombre literal "${e.name_literal}" no coincide con "${e.name_roster}"`);
+        const fuzzy = fuzzyResolve(normLit);
+        if (fuzzy.ambiguous) {
+          problems.push(`Nombre ambiguo en el roster (por similitud): "${e.name_literal}"`);
+        } else if (fuzzy.profileId) {
+          profileId = fuzzy.profileId;
+        } else if (e.name_roster !== 'NO_ROSTER') {
+          const rosterIds = nameToProfiles.get(normalize(e.name_roster));
+          if (rosterIds && rosterIds.size === 1 && levenshtein(normLit, normalize(e.name_roster)) <= 3) {
+            profileId = [...rosterIds][0];
+          } else {
+            unmatched = true;
+          }
         } else {
-          profileId = [...rosterIds][0];
+          unmatched = true;
         }
       }
 
       rows.push({
         ...baseRow,
         profile_id: profileId,
-        status: problems.length === 0 ? 'validated' : 'needs_review',
-        review_reason: problems.length > 0 ? problems.join('; ') : null,
+        status: problems.length > 0 ? 'needs_review' : unmatched ? 'unmatched' : 'validated',
+        review_reason: problems.length > 0
+          ? problems.join('; ')
+          : unmatched ? `"${e.name_literal}" no está registrado en la app` : null,
       });
     }
 
@@ -551,7 +621,7 @@ async function processRecord(
         .map((r) => {
           const d = new Date(r.assignment_date + 'T00:00:00Z');
           const dateLabel = `${SPANISH_WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()}`;
-          return `<li><strong>${dateLabel} · ${r.assignment_time}</strong>${r.location ? ` — ${r.location}` : ''}</li>`;
+          return `<li><strong>${dateLabel} · ${r.assignment_time}</strong> — ${r.location ?? 'lugar: consulta el cuadrante'}</li>`;
         })
         .join('');
       const html = `
@@ -609,5 +679,6 @@ async function processRecord(
       notified: notifiedCount,
       skipped_by_allowlist: skippedByAllowlist,
       needs_review: needsReview.length,
+      unmatched: inserted.filter((r) => r.status === 'unmatched').length,
     }));
 }
