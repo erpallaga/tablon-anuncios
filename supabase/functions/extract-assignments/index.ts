@@ -17,6 +17,9 @@
 //   RESEND_FROM (default: "Tablón de Anuncios <onboarding@resend.dev>")
 //   WEBHOOK_SECRET (si se define, el webhook debe enviar el header x-webhook-secret)
 //   ASSIGNMENT_DURATION_MINUTES (default: 60)
+//   NOTIFICATION_ALLOWLIST (emails separados por comas; si se define, solo esos
+//     usuarios reciben notificaciones — modo beta. La extracción y la tabla
+//     extracted_assignments se completan igualmente para todos.)
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import Anthropic from 'npm:@anthropic-ai/sdk';
@@ -452,11 +455,24 @@ Deno.serve(async (req) => {
       byProfile.get(r.profile_id!)!.push(r);
     }
 
+    // Modo beta: si hay allowlist, solo se notifica a esos emails. El resto de
+    // asignaciones validadas se quedan en 'validated' (sin notified_at), de modo
+    // que al quitar la allowlist un reprocesado no duplicaría avisos ya enviados.
+    const allowlist = (Deno.env.get('NOTIFICATION_ALLOWLIST') ?? '')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+
     let notifiedCount = 0;
+    let skippedByAllowlist = 0;
     const notifyErrors: string[] = [];
     for (const [profileId, userRows] of byProfile) {
       const profile = profileById.get(profileId);
       if (!profile?.email) continue;
+      if (allowlist.length > 0 && !allowlist.includes(profile.email.toLowerCase())) {
+        skippedByAllowlist += userRows.length;
+        continue;
+      }
       userRows.sort((a, b) => (a.assignment_date + a.assignment_time).localeCompare(b.assignment_date + b.assignment_time));
 
       const listHtml = userRows
@@ -504,7 +520,7 @@ Deno.serve(async (req) => {
         ${needsReview.length > 0 ? `<p>Asignaciones que requieren revisión (no se ha notificado a nadie por ellas):</p>
         <ul>${needsReview.map((r) => `<li>${r.assignment_date} ${r.assignment_time} — ${r.name_literal || '(sin nombre)'}: ${r.review_reason}</li>`).join('')}</ul>` : ''}
         ${notifyErrors.length > 0 ? `<p>Errores de envío:</p><ul>${notifyErrors.map((e) => `<li>${e}</li>`).join('')}</ul>` : ''}
-        <p>Resumen: ${validated.length} validadas, ${notifiedCount} notificadas, ${needsReview.length} en revisión.</p>`;
+        <p>Resumen: ${validated.length} validadas, ${notifiedCount} notificadas${skippedByAllowlist > 0 ? ` (${skippedByAllowlist} omitidas por el modo beta)` : ''}, ${needsReview.length} en revisión.</p>`;
       for (const editor of editors) {
         try {
           await sendEmail(resendKey, from, editor.email, `Revisión necesaria: cuadrante "${record.title}"`, reviewHtml);
@@ -520,6 +536,7 @@ Deno.serve(async (req) => {
         extracted: rows.length,
         validated: validated.length,
         notified: notifiedCount,
+        skipped_by_allowlist: skippedByAllowlist,
         needs_review: needsReview.length,
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },

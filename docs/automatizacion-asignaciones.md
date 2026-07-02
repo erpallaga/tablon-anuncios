@@ -200,7 +200,11 @@ Pasos para activarla:
    # supabase secrets set ANTHROPIC_MODEL_PASS_B=claude-sonnet-4-6
    # supabase secrets set RESEND_FROM="Tablón <avisos@tudominio.com>"
    # supabase secrets set ASSIGNMENT_DURATION_MINUTES=60
+   # Modo beta — solo estos emails reciben notificaciones (la extracción se hace igual):
+   # supabase secrets set NOTIFICATION_ALLOWLIST="eric@ejemplo.com,raquel@ejemplo.com"
    ```
+   Para abrir el sistema a todos los usuarios cuando termine la beta:
+   `supabase secrets unset NOTIFICATION_ALLOWLIST` y volver a desplegar la función.
    La API key de Anthropic se crea en console.anthropic.com (requiere cargar un
    mínimo de saldo; el consumo real será de céntimos). La de Resend en resend.com
    (gratis hasta 3.000 emails/mes; para enviar a cualquier destinatario hay que
