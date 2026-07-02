@@ -282,6 +282,11 @@ function makeSendEmail(): SendEmail {
   throw new Error('Falta BREVO_API_KEY o RESEND_API_KEY');
 }
 
+// Supabase expone EdgeRuntime.waitUntil para seguir ejecutando después de
+// responder. Es imprescindible aquí: el Database Webhook corta la conexión a
+// los pocos segundos, pero la doble pasada del LLM + emails tarda 20-60 s.
+declare const EdgeRuntime: { waitUntil?: (p: Promise<unknown>) => void } | undefined;
+
 Deno.serve(async (req) => {
   try {
     const webhookSecret = Deno.env.get('WEBHOOK_SECRET');
@@ -313,6 +318,34 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ skipped: 'ya procesado' }), { status: 200 });
     }
 
+    // Responder ya al webhook y procesar en segundo plano
+    const task = processRecord(supabase, record).catch((err) => {
+      console.error('extract-assignments error en segundo plano:', err);
+    });
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(task);
+    } else {
+      await task; // ejecución local sin EdgeRuntime
+    }
+    return new Response(JSON.stringify({ accepted: true, grid_item_id: record.id }), {
+      status: 202,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (err) {
+    console.error('extract-assignments error:', err);
+    return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
+  }
+});
+
+// deno-lint-ignore no-explicit-any
+type AnyRow = Record<string, any>;
+
+async function processRecord(
+  // Sin tipos generados de la BD, el cliente se usa sin genéricos
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  record: AnyRow,
+): Promise<void> {
     // ── Roster de usuarios registrados ──────────────────────────────────────
     const { data: profiles, error: profilesError } = await supabase
       .from('profiles')
@@ -335,7 +368,8 @@ Deno.serve(async (req) => {
       }
     }
     if (rosterNames.length === 0) {
-      return new Response(JSON.stringify({ error: 'No hay perfiles activos en el roster' }), { status: 200 });
+      console.warn('extract-assignments: no hay perfiles activos en el roster');
+      return;
     }
 
     // ── Descarga del archivo ────────────────────────────────────────────────
@@ -469,14 +503,16 @@ Deno.serve(async (req) => {
     }
 
     if (rows.length === 0) {
-      return new Response(JSON.stringify({ warning: 'No se extrajo ninguna asignación' }), { status: 200 });
+      console.warn('extract-assignments: no se extrajo ninguna asignación');
+      return;
     }
 
-    const { data: inserted, error: insertError } = await supabase
+    const { data: insertedData, error: insertError } = await supabase
       .from('extracted_assignments')
       .insert(rows)
       .select('id, profile_id, assignment_date, assignment_time, location, name_literal, status, review_reason');
     if (insertError) throw insertError;
+    const inserted = (insertedData ?? []) as (AssignmentRow & { id: string })[];
 
     // ── Notificaciones ──────────────────────────────────────────────────────
     const sendEmail = makeSendEmail();
@@ -484,7 +520,7 @@ Deno.serve(async (req) => {
     const monthLabel = `${SPANISH_MONTHS[month - 1] ?? month} ${year}`;
     const profileById = new Map(roster.map((p) => [p.id, p]));
 
-    const validated = (inserted ?? []).filter((r) => r.status === 'validated' && r.profile_id);
+    const validated = inserted.filter((r) => r.status === 'validated' && r.profile_id);
     const byProfile = new Map<string, typeof validated>();
     for (const r of validated) {
       if (!byProfile.has(r.profile_id!)) byProfile.set(r.profile_id!, []);
@@ -548,7 +584,7 @@ Deno.serve(async (req) => {
     }
 
     // Aviso a editores si hay algo que revisar
-    const needsReview = (inserted ?? []).filter((r) => r.status === 'needs_review');
+    const needsReview = inserted.filter((r) => r.status === 'needs_review');
     if (needsReview.length > 0 || notifyErrors.length > 0) {
       const editors = roster.filter((p) => (p.role === 'admin' || p.role === 'editor') && p.email);
       const reviewHtml = `
@@ -566,19 +602,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        extracted: rows.length,
-        validated: validated.length,
-        notified: notifiedCount,
-        skipped_by_allowlist: skippedByAllowlist,
-        needs_review: needsReview.length,
-      }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } },
-    );
-  } catch (err) {
-    console.error('extract-assignments error:', err);
-    return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
-  }
-});
+    console.log('extract-assignments resultado:', JSON.stringify({
+      grid_item_id: record.id,
+      extracted: rows.length,
+      validated: validated.length,
+      notified: notifiedCount,
+      skipped_by_allowlist: skippedByAllowlist,
+      needs_review: needsReview.length,
+    }));
+}

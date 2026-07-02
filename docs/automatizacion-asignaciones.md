@@ -227,12 +227,15 @@ Pasos para activarla:
    (`--no-verify-jwt` porque la llama el webhook, no un usuario; la protección
    es el header `x-webhook-secret`.)
 
-4. **Crear el webhook**: en el panel de Supabase → Database → Webhooks → Create:
+4. **Crear el webhook**: en el panel de Supabase → **Integrations → Database
+   Webhooks** (habilitarlos la primera vez; en el panel antiguo: Database → Webhooks)
+   → Create a new hook:
    - Tabla: `grid_items`, evento: **solo INSERT**
    - Tipo: HTTP Request, método POST
    - URL: `https://<project>.supabase.co/functions/v1/extract-assignments`
    - Headers: `x-webhook-secret: <el mismo WEBHOOK_SECRET>`
-   - Timeout: el máximo disponible (la extracción con doble pasada tarda 20-60 s).
+   - Timeout: el valor por defecto sirve — la función responde inmediatamente (202)
+     y sigue procesando en segundo plano con `EdgeRuntime.waitUntil`.
 
 5. **Alias de usuarios** (opcional pero recomendado): si el nombre que aparece en
    los cuadrantes no coincide con el `display_name` del usuario, añadir alias:
