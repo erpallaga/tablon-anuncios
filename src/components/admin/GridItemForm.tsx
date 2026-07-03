@@ -238,32 +238,32 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
                   </div>
                 )}
 
+                {isNew && (
+                  <div className="rounded-md bg-blue-50 p-3 mt-3">
+                    <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.extractAssignments ?? false}
+                        onChange={(e) => setFormData(prev => ({ ...prev, extractAssignments: e.target.checked }))}
+                        className="mt-0.5 text-blue-600"
+                      />
+                      <span>
+                        <span className="font-medium">📅 Análisis Automático de Asignaciones</span>
+                        <br />
+                        <span className="text-xs text-gray-500">
+                          Al crearlo se analizará el documento y se notificará por email
+                          a los usuarios registrados que tengan asignaciones.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                )}
+
                 {error && (
                   <p className="mt-2 text-sm text-red-600">{error}</p>
                 )}
               </div>
             </div>
-
-            {isNew && (
-              <div className="rounded-md bg-blue-50 p-3 md:col-span-2">
-                <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.extractAssignments ?? false}
-                    onChange={(e) => setFormData(prev => ({ ...prev, extractAssignments: e.target.checked }))}
-                    className="mt-0.5 text-blue-600"
-                  />
-                  <span>
-                    <span className="font-medium">📅 Cuadrante RSC de asignaciones</span>
-                    <br />
-                    <span className="text-xs text-gray-500">
-                      Al crearlo se analizará el documento y se notificará por email
-                      a los usuarios registrados que tengan asignaciones.
-                    </span>
-                  </span>
-                </label>
-              </div>
-            )}
           </div>
 
           <div className="flex justify-end gap-3 p-4 border-t flex-shrink-0">
