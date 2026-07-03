@@ -451,9 +451,23 @@ async function processRecord(
 
     const toDateString = (d: number) => `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
-    // Asimilación de erratas: busca el nombre del roster más cercano por
-    // distancia de edición. Solo asimila con distancia ≤ 2 y perfil único.
-    const fuzzyResolve = (normLit: string): { profileId: string | null; ambiguous: boolean } => {
+    // Resolución nombre → perfil:
+    // 1) coincidencia exacta (display_name o alias, normalizados)
+    // 2) asimilación de erratas por distancia de edición ≤ 2 (Erik/Erick/Pelleres…)
+    // 3) mapeo del modelo (name_roster) reforzado con proximidad ≤ 3
+    // 4) nada aplica → sin perfil (persona no registrada)
+    const resolveName = (
+      nameLiteral: string,
+      nameRoster: string,
+    ): { profileId: string | null; ambiguousProblem: string | null } => {
+      const normLit = normalize(nameLiteral);
+      const literalIds = nameToProfiles.get(normLit);
+      if (literalIds && literalIds.size === 1) {
+        return { profileId: [...literalIds][0], ambiguousProblem: null };
+      }
+      if (literalIds && literalIds.size > 1) {
+        return { profileId: null, ambiguousProblem: `Nombre ambiguo en el roster: "${nameLiteral}"` };
+      }
       let best = Infinity;
       const bestProfiles = new Set<string>();
       for (const [name, ids] of nameToProfiles) {
@@ -466,9 +480,19 @@ async function processRecord(
           ids.forEach((id) => bestProfiles.add(id));
         }
       }
-      if (best <= 2 && bestProfiles.size === 1) return { profileId: [...bestProfiles][0], ambiguous: false };
-      if (best <= 2 && bestProfiles.size > 1) return { profileId: null, ambiguous: true };
-      return { profileId: null, ambiguous: false };
+      if (best <= 2 && bestProfiles.size === 1) {
+        return { profileId: [...bestProfiles][0], ambiguousProblem: null };
+      }
+      if (best <= 2 && bestProfiles.size > 1) {
+        return { profileId: null, ambiguousProblem: `Nombre ambiguo en el roster (por similitud): "${nameLiteral}"` };
+      }
+      if (nameRoster !== 'NO_ROSTER') {
+        const rosterIds = nameToProfiles.get(normalize(nameRoster));
+        if (rosterIds && rosterIds.size === 1 && levenshtein(normLit, normalize(nameRoster)) <= 3) {
+          return { profileId: [...rosterIds][0], ambiguousProblem: null };
+        }
+      }
+      return { profileId: null, ambiguousProblem: null };
     };
 
     for (const e of activeA) {
@@ -513,36 +537,10 @@ async function processRecord(
         problems.push(`El día ${e.date} no cae en ${e.weekday}`);
       }
 
-      // Resolución nombre → perfil:
-      // 1) coincidencia exacta (display_name o alias, normalizados)
-      // 2) asimilación de erratas por distancia de edición ≤ 2 (Erik/Erick/Pelleres…)
-      // 3) mapeo del modelo (name_roster) reforzado con proximidad ≤ 3
-      // 4) si nada aplica → 'unmatched': persona no registrada, se ignora sin avisar
-      let profileId: string | null = null;
-      let unmatched = false;
-      const normLit = normalize(e.name_literal);
-      const literalIds = nameToProfiles.get(normLit);
-      if (literalIds && literalIds.size === 1) {
-        profileId = [...literalIds][0];
-      } else if (literalIds && literalIds.size > 1) {
-        problems.push(`Nombre ambiguo en el roster: "${e.name_literal}"`);
-      } else {
-        const fuzzy = fuzzyResolve(normLit);
-        if (fuzzy.ambiguous) {
-          problems.push(`Nombre ambiguo en el roster (por similitud): "${e.name_literal}"`);
-        } else if (fuzzy.profileId) {
-          profileId = fuzzy.profileId;
-        } else if (e.name_roster !== 'NO_ROSTER') {
-          const rosterIds = nameToProfiles.get(normalize(e.name_roster));
-          if (rosterIds && rosterIds.size === 1 && levenshtein(normLit, normalize(e.name_roster)) <= 3) {
-            profileId = [...rosterIds][0];
-          } else {
-            unmatched = true;
-          }
-        } else {
-          unmatched = true;
-        }
-      }
+      const { profileId, ambiguousProblem } = resolveName(e.name_literal, e.name_roster);
+      if (ambiguousProblem) problems.push(ambiguousProblem);
+      // 'unmatched': persona no registrada en la app — se guarda sin avisar a nadie
+      const unmatched = profileId === null && ambiguousProblem === null;
 
       rows.push({
         ...baseRow,
@@ -554,7 +552,9 @@ async function processRecord(
       });
     }
 
-    // Entradas que solo aparecen en la pasada B → también a revisión
+    // Entradas que solo aparecen en la pasada B → también a revisión. Se
+    // resuelve el nombre igualmente para saber si afecta a un usuario
+    // registrado (solo entonces se avisará a los editores).
     const keysA = seenKeys;
     for (const e of activeB) {
       const key = entryKey(e);
@@ -562,7 +562,7 @@ async function processRecord(
       keysA.add(key);
       rows.push({
         grid_item_id: record.id as string,
-        profile_id: null,
+        profile_id: resolveName(e.name_literal, e.name_roster).profileId,
         assignment_date: toDateString(Math.min(Math.max(e.date, 1), 31)),
         assignment_time: normalizeTime(e.time) ?? e.time,
         location: e.location?.trim() || null,
@@ -653,16 +653,22 @@ async function processRecord(
       }
     }
 
-    // Aviso a editores si hay algo que revisar
+    // Aviso a editores SOLO cuando la incidencia afecta a un usuario registrado
+    // (perfil resuelto o nombre ambiguo entre registrados) o hay errores de
+    // envío. Incidencias sobre personas sin cuenta se guardan en la tabla pero
+    // no generan email.
     const needsReview = inserted.filter((r) => r.status === 'needs_review');
-    if (needsReview.length > 0 || notifyErrors.length > 0) {
+    const reviewForEditors = needsReview.filter(
+      (r) => r.profile_id !== null || (r.review_reason ?? '').includes('ambiguo'),
+    );
+    if (reviewForEditors.length > 0 || notifyErrors.length > 0) {
       const editors = roster.filter((p) => (p.role === 'admin' || p.role === 'editor') && p.email);
       const reviewHtml = `
-        <p>El análisis del cuadrante <strong>"${record.title}"</strong> (${monthLabel}) ha terminado con avisos.</p>
-        ${needsReview.length > 0 ? `<p>Asignaciones que requieren revisión (no se ha notificado a nadie por ellas):</p>
-        <ul>${needsReview.map((r) => `<li>${r.assignment_date} ${r.assignment_time} — ${r.name_literal || '(sin nombre)'}: ${r.review_reason}</li>`).join('')}</ul>` : ''}
+        <p>El análisis del cuadrante <strong>"${record.title}"</strong> (${monthLabel}) ha terminado con avisos que afectan a usuarios registrados.</p>
+        ${reviewForEditors.length > 0 ? `<p>Asignaciones que requieren revisión (no se ha notificado a nadie por ellas):</p>
+        <ul>${reviewForEditors.map((r) => `<li>${r.assignment_date} ${r.assignment_time} — ${r.name_literal || '(sin nombre)'}: ${r.review_reason}</li>`).join('')}</ul>` : ''}
         ${notifyErrors.length > 0 ? `<p>Errores de envío:</p><ul>${notifyErrors.map((e) => `<li>${e}</li>`).join('')}</ul>` : ''}
-        <p>Resumen: ${validated.length} validadas, ${notifiedCount} notificadas${skippedByAllowlist > 0 ? ` (${skippedByAllowlist} omitidas por el modo beta)` : ''}, ${needsReview.length} en revisión.</p>`;
+        <p>Resumen: ${validated.length} validadas, ${notifiedCount} notificadas${skippedByAllowlist > 0 ? ` (${skippedByAllowlist} omitidas por el modo beta)` : ''}, ${needsReview.length} en revisión (${reviewForEditors.length} relevantes).</p>`;
       for (const editor of editors) {
         try {
           await sendEmail(editor.email, `Revisión necesaria: cuadrante "${record.title}"`, reviewHtml);
