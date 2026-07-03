@@ -95,8 +95,8 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex justify-between items-center p-4 border-b">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="flex justify-between items-center p-4 border-b flex-shrink-0">
           <h2 className="text-xl font-semibold">
             {isNew ? 'Nuevo elemento' : 'Editar elemento'}
           </h2>
@@ -109,158 +109,164 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Título
-            </label>
-            <input
-              type="text"
-              name="title"
-              value={formData.title}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Icono
-            </label>
-            <div className="grid grid-cols-8 gap-1">
-              {EMOJIS.map(emoji => (
-                <button
-                  key={emoji}
-                  type="button"
-                  className={`text-2xl p-1 rounded-md transition-colors ${
-                    formData.icon === emoji 
-                      ? 'bg-blue-100 ring-2 ring-blue-400' 
-                      : 'hover:bg-gray-100'
-                  }`}
-                  onClick={() => setFormData(prev => ({ ...prev, icon: emoji }))}
-                  title={`Seleccionar ${emoji}`}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center gap-4 mb-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <input
-                  type="radio"
-                  checked={useFileUpload}
-                  onChange={() => setUseFileUpload(true)}
-                  className="text-blue-600"
-                />
-                Subir archivo
-              </label>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <input
-                  type="radio"
-                  checked={!useFileUpload}
-                  onChange={() => setUseFileUpload(false)}
-                  className="text-blue-600"
-                />
-                URL del archivo
-              </label>
-            </div>
-
-            {useFileUpload ? (
+        <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden">
+          <div className="p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
               <div>
-                <label
-                  htmlFor="file-upload"
-                  className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100"
-                >
-                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    <Upload className="w-8 h-8 mb-2 text-gray-500" />
-                    <p className="mb-2 text-sm text-gray-500">
-                      <span className="font-semibold">Clic para subir</span> o arrastra el archivo
-                    </p>
-                    <p className="text-xs text-gray-500">PDF, JPG, PNG, GIF, WEBP, SVG</p>
-                  </div>
-                  <input
-                    id="file-upload"
-                    type="file"
-                    className="hidden"
-                    accept=".pdf,application/pdf,.jpg,.jpeg,.png,.gif,.webp,.svg,image/*"
-                    onChange={handleFileChange}
-                    disabled={uploading}
-                  />
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Título
                 </label>
-                {selectedFile && (
-                  <p className="mt-2 text-sm text-gray-600">
-                    Archivo seleccionado: {selectedFile.name}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-3">
                 <input
                   type="text"
-                  name="fileUrl"
-                  value={formData.fileUrl}
+                  name="title"
+                  value={formData.title}
                   onChange={handleChange}
-                  placeholder="https://ejemplo.com/archivo.pdf o URL de imagen"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required={!useFileUpload}
+                  required
                 />
-                <div className="flex items-center gap-4">
-                  <span className="text-xs text-gray-500">Tipo:</span>
-                  <label className="flex items-center gap-1.5 text-sm text-gray-700">
-                    <input
-                      type="radio"
-                      name="fileType"
-                      value="pdf"
-                      checked={formData.fileType === 'pdf' || formData.fileType === undefined}
-                      onChange={() => setFormData(prev => ({ ...prev, fileType: 'pdf' }))}
-                    />
-                    PDF
-                  </label>
-                  <label className="flex items-center gap-1.5 text-sm text-gray-700">
-                    <input
-                      type="radio"
-                      name="fileType"
-                      value="image"
-                      checked={formData.fileType === 'image'}
-                      onChange={() => setFormData(prev => ({ ...prev, fileType: 'image' }))}
-                    />
-                    Imagen
-                  </label>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Icono
+                </label>
+                <div className="grid grid-cols-6 gap-1">
+                  {EMOJIS.map(emoji => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      className={`text-2xl p-1 rounded-md transition-colors ${
+                        formData.icon === emoji
+                          ? 'bg-blue-100 ring-2 ring-blue-400'
+                          : 'hover:bg-gray-100'
+                      }`}
+                      onClick={() => setFormData(prev => ({ ...prev, icon: emoji }))}
+                      title={`Seleccionar ${emoji}`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
                 </div>
               </div>
-            )}
+            </div>
 
-            {error && (
-              <p className="mt-2 text-sm text-red-600">{error}</p>
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center gap-4 mb-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <input
+                      type="radio"
+                      checked={useFileUpload}
+                      onChange={() => setUseFileUpload(true)}
+                      className="text-blue-600"
+                    />
+                    Subir archivo
+                  </label>
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <input
+                      type="radio"
+                      checked={!useFileUpload}
+                      onChange={() => setUseFileUpload(false)}
+                      className="text-blue-600"
+                    />
+                    URL del archivo
+                  </label>
+                </div>
+
+                {useFileUpload ? (
+                  <div>
+                    <label
+                      htmlFor="file-upload"
+                      className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100"
+                    >
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <Upload className="w-8 h-8 mb-2 text-gray-500" />
+                        <p className="mb-2 text-sm text-gray-500">
+                          <span className="font-semibold">Clic para subir</span> o arrastra el archivo
+                        </p>
+                        <p className="text-xs text-gray-500">PDF, JPG, PNG, GIF, WEBP, SVG</p>
+                      </div>
+                      <input
+                        id="file-upload"
+                        type="file"
+                        className="hidden"
+                        accept=".pdf,application/pdf,.jpg,.jpeg,.png,.gif,.webp,.svg,image/*"
+                        onChange={handleFileChange}
+                        disabled={uploading}
+                      />
+                    </label>
+                    {selectedFile && (
+                      <p className="mt-2 text-sm text-gray-600">
+                        Archivo seleccionado: {selectedFile.name}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      name="fileUrl"
+                      value={formData.fileUrl}
+                      onChange={handleChange}
+                      placeholder="https://ejemplo.com/archivo.pdf o URL de imagen"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required={!useFileUpload}
+                    />
+                    <div className="flex items-center gap-4">
+                      <span className="text-xs text-gray-500">Tipo:</span>
+                      <label className="flex items-center gap-1.5 text-sm text-gray-700">
+                        <input
+                          type="radio"
+                          name="fileType"
+                          value="pdf"
+                          checked={formData.fileType === 'pdf' || formData.fileType === undefined}
+                          onChange={() => setFormData(prev => ({ ...prev, fileType: 'pdf' }))}
+                        />
+                        PDF
+                      </label>
+                      <label className="flex items-center gap-1.5 text-sm text-gray-700">
+                        <input
+                          type="radio"
+                          name="fileType"
+                          value="image"
+                          checked={formData.fileType === 'image'}
+                          onChange={() => setFormData(prev => ({ ...prev, fileType: 'image' }))}
+                        />
+                        Imagen
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {error && (
+                  <p className="mt-2 text-sm text-red-600">{error}</p>
+                )}
+              </div>
+            </div>
+
+            {isNew && (
+              <div className="rounded-md bg-blue-50 p-3 md:col-span-2">
+                <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.extractAssignments ?? false}
+                    onChange={(e) => setFormData(prev => ({ ...prev, extractAssignments: e.target.checked }))}
+                    className="mt-0.5 text-blue-600"
+                  />
+                  <span>
+                    <span className="font-medium">📅 Cuadrante RSC de asignaciones</span>
+                    <br />
+                    <span className="text-xs text-gray-500">
+                      Al crearlo se analizará el documento y se notificará por email
+                      a los usuarios registrados que tengan asignaciones.
+                    </span>
+                  </span>
+                </label>
+              </div>
             )}
           </div>
 
-          {isNew && (
-            <div className="rounded-md bg-blue-50 p-3">
-              <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.extractAssignments ?? false}
-                  onChange={(e) => setFormData(prev => ({ ...prev, extractAssignments: e.target.checked }))}
-                  className="mt-0.5 text-blue-600"
-                />
-                <span>
-                  <span className="font-medium">📅 Cuadrante RSC de asignaciones</span>
-                  <br />
-                  <span className="text-xs text-gray-500">
-                    Al crearlo se analizará el documento y se notificará por email
-                    a los usuarios registrados que tengan asignaciones.
-                  </span>
-                </span>
-              </label>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex justify-end gap-3 p-4 border-t flex-shrink-0">
             <button
               type="button"
               onClick={onCancel}
