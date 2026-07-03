@@ -73,7 +73,7 @@ interface AssignmentRow {
   assignment_time: string;
   location: string | null;
   name_literal: string;
-  status: 'validated' | 'needs_review';
+  status: 'validated' | 'needs_review' | 'unmatched';
   review_reason: string | null;
 }
 
@@ -96,8 +96,33 @@ function normalizeTime(s: string): string | null {
   return `${String(h).padStart(2, '0')}:${m[2]}`;
 }
 
+// Identidad de una asignación entre pasadas: fecha + hora + nombre. El lugar se
+// compara aparte: una discrepancia de lugar no invalida la asignación (persona y
+// fecha verificadas), solo deja el lugar sin confirmar.
 function entryKey(e: ExtractedEntry): string {
-  return [e.date, normalizeTime(e.time) ?? e.time, normalize(e.name_literal), normalize(e.location)].join('|');
+  return [e.date, normalizeTime(e.time) ?? e.time, normalize(e.name_literal)].join('|');
+}
+
+// Distancia de edición (Levenshtein) para asimilar erratas de nombres:
+// "Erik Pallares" / "Eric Pelleres" → "Eric Pallarés"
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  const m = a.length;
+  const n = b.length;
+  if (m === 0 || n === 0) return m + n;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const curr = [i];
+    for (let j = 1; j <= n; j++) {
+      curr[j] = Math.min(
+        prev[j] + 1,
+        curr[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    prev = curr;
+  }
+  return prev[n];
 }
 
 function buildSchema(rosterNames: string[]) {
@@ -156,6 +181,7 @@ Método de trabajo, síguelo estrictamente:
 2. Recorre las semanas fila por fila y, dentro de cada semana, las celdas columna por columna.
 3. Para cada celda, determina el día del mes por el NÚMERO escrito en esa celda (no por conteo), y el día de la semana por la COLUMNA en la que está. Ambos deben ser coherentes; si no lo son, revisa tu lectura de esa celda antes de continuar.
 4. Asocia cada hora/lugar/conductor únicamente con el contenido de SU celda. No arrastres nombres de celdas vecinas.
+5. Con el LUGAR, cópialo letra a letra de la celda. NO asumas que es el lugar más frecuente del cuadrante: algunas reuniones se celebran en lugares distintos al habitual y es un error grave uniformarlos.
 
 Sé exhaustivo: no omitas ninguna reunión ni inventes ninguna. Si una celda no tiene reuniones, no produzcas nada para ella.`;
 
@@ -420,9 +446,54 @@ async function processRecord(
     const monthValid = month >= 1 && month <= 12 && year >= 2020 && year <= 2100;
 
     const keysB = new Set(activeB.map(entryKey));
+    const locationByKeyB = new Map(activeB.map((e) => [entryKey(e), normalize(e.location ?? '')]));
     const seenKeys = new Set<string>();
 
     const toDateString = (d: number) => `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+    // Resolución nombre → perfil:
+    // 1) coincidencia exacta (display_name o alias, normalizados)
+    // 2) asimilación de erratas por distancia de edición ≤ 2 (Erik/Erick/Pelleres…)
+    // 3) mapeo del modelo (name_roster) reforzado con proximidad ≤ 3
+    // 4) nada aplica → sin perfil (persona no registrada)
+    const resolveName = (
+      nameLiteral: string,
+      nameRoster: string,
+    ): { profileId: string | null; ambiguousProblem: string | null } => {
+      const normLit = normalize(nameLiteral);
+      const literalIds = nameToProfiles.get(normLit);
+      if (literalIds && literalIds.size === 1) {
+        return { profileId: [...literalIds][0], ambiguousProblem: null };
+      }
+      if (literalIds && literalIds.size > 1) {
+        return { profileId: null, ambiguousProblem: `Nombre ambiguo en el roster: "${nameLiteral}"` };
+      }
+      let best = Infinity;
+      const bestProfiles = new Set<string>();
+      for (const [name, ids] of nameToProfiles) {
+        const d = levenshtein(normLit, name);
+        if (d < best) {
+          best = d;
+          bestProfiles.clear();
+          ids.forEach((id) => bestProfiles.add(id));
+        } else if (d === best) {
+          ids.forEach((id) => bestProfiles.add(id));
+        }
+      }
+      if (best <= 2 && bestProfiles.size === 1) {
+        return { profileId: [...bestProfiles][0], ambiguousProblem: null };
+      }
+      if (best <= 2 && bestProfiles.size > 1) {
+        return { profileId: null, ambiguousProblem: `Nombre ambiguo en el roster (por similitud): "${nameLiteral}"` };
+      }
+      if (nameRoster !== 'NO_ROSTER') {
+        const rosterIds = nameToProfiles.get(normalize(nameRoster));
+        if (rosterIds && rosterIds.size === 1 && levenshtein(normLit, normalize(nameRoster)) <= 3) {
+          return { profileId: [...rosterIds][0], ambiguousProblem: null };
+        }
+      }
+      return { profileId: null, ambiguousProblem: null };
+    };
 
     for (const e of activeA) {
       const key = entryKey(e);
@@ -430,11 +501,19 @@ async function processRecord(
       seenKeys.add(key);
 
       const time = normalizeTime(e.time);
+
+      // Lugar: solo se da por bueno si ambas pasadas leyeron el mismo. Si
+      // discrepan, la asignación sigue siendo válida (persona/fecha/hora
+      // verificadas) pero el lugar queda sin confirmar (null → el email
+      // remite al cuadrante).
+      const locationB = locationByKeyB.get(key);
+      const locationAgreed = locationB === undefined || normalize(e.location ?? '') === locationB;
+
       const baseRow = {
         grid_item_id: record.id as string,
         assignment_date: toDateString(Math.min(Math.max(e.date, 1), 31)),
         assignment_time: time ?? e.time,
-        location: e.location?.trim() || null,
+        location: locationAgreed ? (e.location?.trim() || null) : null,
         name_literal: e.name_literal.trim(),
       };
 
@@ -458,33 +537,24 @@ async function processRecord(
         problems.push(`El día ${e.date} no cae en ${e.weekday}`);
       }
 
-      // Resolución nombre → perfil
-      let profileId: string | null = null;
-      if (e.name_roster === 'NO_ROSTER') {
-        problems.push(`"${e.name_literal}" no corresponde a ningún usuario registrado`);
-      } else {
-        const literalIds = nameToProfiles.get(normalize(e.name_literal));
-        const rosterIds = nameToProfiles.get(normalize(e.name_roster));
-        if (!rosterIds || rosterIds.size === 0) {
-          problems.push(`Nombre fuera del roster: "${e.name_roster}"`);
-        } else if (rosterIds.size > 1) {
-          problems.push(`Nombre ambiguo en el roster: "${e.name_roster}"`);
-        } else if (literalIds && !literalIds.has([...rosterIds][0])) {
-          problems.push(`El nombre literal "${e.name_literal}" no coincide con "${e.name_roster}"`);
-        } else {
-          profileId = [...rosterIds][0];
-        }
-      }
+      const { profileId, ambiguousProblem } = resolveName(e.name_literal, e.name_roster);
+      if (ambiguousProblem) problems.push(ambiguousProblem);
+      // 'unmatched': persona no registrada en la app — se guarda sin avisar a nadie
+      const unmatched = profileId === null && ambiguousProblem === null;
 
       rows.push({
         ...baseRow,
         profile_id: profileId,
-        status: problems.length === 0 ? 'validated' : 'needs_review',
-        review_reason: problems.length > 0 ? problems.join('; ') : null,
+        status: problems.length > 0 ? 'needs_review' : unmatched ? 'unmatched' : 'validated',
+        review_reason: problems.length > 0
+          ? problems.join('; ')
+          : unmatched ? `"${e.name_literal}" no está registrado en la app` : null,
       });
     }
 
-    // Entradas que solo aparecen en la pasada B → también a revisión
+    // Entradas que solo aparecen en la pasada B → también a revisión. Se
+    // resuelve el nombre igualmente para saber si afecta a un usuario
+    // registrado (solo entonces se avisará a los editores).
     const keysA = seenKeys;
     for (const e of activeB) {
       const key = entryKey(e);
@@ -492,7 +562,7 @@ async function processRecord(
       keysA.add(key);
       rows.push({
         grid_item_id: record.id as string,
-        profile_id: null,
+        profile_id: resolveName(e.name_literal, e.name_roster).profileId,
         assignment_date: toDateString(Math.min(Math.max(e.date, 1), 31)),
         assignment_time: normalizeTime(e.time) ?? e.time,
         location: e.location?.trim() || null,
@@ -551,7 +621,7 @@ async function processRecord(
         .map((r) => {
           const d = new Date(r.assignment_date + 'T00:00:00Z');
           const dateLabel = `${SPANISH_WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()}`;
-          return `<li><strong>${dateLabel} · ${r.assignment_time}</strong>${r.location ? ` — ${r.location}` : ''}</li>`;
+          return `<li><strong>${dateLabel} · ${r.assignment_time}</strong> — ${r.location ?? 'lugar: consulta el cuadrante'}</li>`;
         })
         .join('');
       const html = `
@@ -583,16 +653,22 @@ async function processRecord(
       }
     }
 
-    // Aviso a editores si hay algo que revisar
+    // Aviso a editores SOLO cuando la incidencia afecta a un usuario registrado
+    // (perfil resuelto o nombre ambiguo entre registrados) o hay errores de
+    // envío. Incidencias sobre personas sin cuenta se guardan en la tabla pero
+    // no generan email.
     const needsReview = inserted.filter((r) => r.status === 'needs_review');
-    if (needsReview.length > 0 || notifyErrors.length > 0) {
+    const reviewForEditors = needsReview.filter(
+      (r) => r.profile_id !== null || (r.review_reason ?? '').includes('ambiguo'),
+    );
+    if (reviewForEditors.length > 0 || notifyErrors.length > 0) {
       const editors = roster.filter((p) => (p.role === 'admin' || p.role === 'editor') && p.email);
       const reviewHtml = `
-        <p>El análisis del cuadrante <strong>"${record.title}"</strong> (${monthLabel}) ha terminado con avisos.</p>
-        ${needsReview.length > 0 ? `<p>Asignaciones que requieren revisión (no se ha notificado a nadie por ellas):</p>
-        <ul>${needsReview.map((r) => `<li>${r.assignment_date} ${r.assignment_time} — ${r.name_literal || '(sin nombre)'}: ${r.review_reason}</li>`).join('')}</ul>` : ''}
+        <p>El análisis del cuadrante <strong>"${record.title}"</strong> (${monthLabel}) ha terminado con avisos que afectan a usuarios registrados.</p>
+        ${reviewForEditors.length > 0 ? `<p>Asignaciones que requieren revisión (no se ha notificado a nadie por ellas):</p>
+        <ul>${reviewForEditors.map((r) => `<li>${r.assignment_date} ${r.assignment_time} — ${r.name_literal || '(sin nombre)'}: ${r.review_reason}</li>`).join('')}</ul>` : ''}
         ${notifyErrors.length > 0 ? `<p>Errores de envío:</p><ul>${notifyErrors.map((e) => `<li>${e}</li>`).join('')}</ul>` : ''}
-        <p>Resumen: ${validated.length} validadas, ${notifiedCount} notificadas${skippedByAllowlist > 0 ? ` (${skippedByAllowlist} omitidas por el modo beta)` : ''}, ${needsReview.length} en revisión.</p>`;
+        <p>Resumen: ${validated.length} validadas, ${notifiedCount} notificadas${skippedByAllowlist > 0 ? ` (${skippedByAllowlist} omitidas por el modo beta)` : ''}, ${needsReview.length} en revisión (${reviewForEditors.length} relevantes).</p>`;
       for (const editor of editors) {
         try {
           await sendEmail(editor.email, `Revisión necesaria: cuadrante "${record.title}"`, reviewHtml);
@@ -609,5 +685,6 @@ async function processRecord(
       notified: notifiedCount,
       skipped_by_allowlist: skippedByAllowlist,
       needs_review: needsReview.length,
+      unmatched: inserted.filter((r) => r.status === 'unmatched').length,
     }));
 }

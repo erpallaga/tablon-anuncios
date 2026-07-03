@@ -18,11 +18,17 @@ CREATE TABLE IF NOT EXISTS extracted_assignments (
   location TEXT,
   name_literal TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending', 'validated', 'needs_review', 'notified')),
+    CHECK (status IN ('pending', 'validated', 'needs_review', 'notified', 'unmatched')),
   review_reason TEXT,
   notified_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migración para bases existentes: añadir el estado 'unmatched' (persona del
+-- cuadrante que no está registrada en la app; se ignora sin avisar a editores)
+ALTER TABLE extracted_assignments DROP CONSTRAINT IF EXISTS extracted_assignments_status_check;
+ALTER TABLE extracted_assignments ADD CONSTRAINT extracted_assignments_status_check
+  CHECK (status IN ('pending', 'validated', 'needs_review', 'notified', 'unmatched'));
 
 CREATE INDEX IF NOT EXISTS idx_extracted_assignments_grid_item
   ON extracted_assignments(grid_item_id);

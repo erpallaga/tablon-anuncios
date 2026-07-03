@@ -107,15 +107,27 @@ alucinar), y `name_literal` captura lo que realmente se ve. Si en código la nor
 revisión en vez de notificarse.
 
 **4. Validaciones deterministas (en código, bloquean el envío)**
-- Las dos pasadas producen conjuntos de asignaciones idénticos (la validación principal).
-- `month`/`year` coinciden con lo esperado (del título del documento o del formulario).
-- Toda fecha existe en ese mes y su posición en la tabla es coherente con el día de la semana.
-- `name_literal` ≈ `name_roster` tras normalizar.
-- Sin duplicados exactos (misma fecha+hora+nombre).
-- Las celdas "Se cancela" no generan asignación.
+- Las dos pasadas producen las mismas asignaciones (identidad = fecha+hora+nombre).
+- El lugar se compara aparte: si las pasadas discrepan en el lugar, la asignación
+  sigue siendo válida pero se notifica con "consulta el lugar en el cuadrante" en
+  vez de elegir un lugar a ciegas.
+- `month`/`year` coinciden entre pasadas; toda fecha existe en ese mes y su
+  posición en la tabla es coherente con el día de la semana.
+- Sin duplicados exactos; las celdas "Se cancela" no generan asignación.
+
+**Resolución nombre → usuario (con asimilación de erratas):**
+1. Coincidencia exacta con `display_name` o alias (normalizando acentos/mayúsculas).
+2. Distancia de edición ≤ 2 con un único perfil ("Erik Pallares", "Erick Pallares",
+   "Eric Pelleres" → Eric Pallarés).
+3. Mapeo del propio modelo (`name_roster`) reforzado con proximidad ≤ 3.
+4. Nada aplica → estado `unmatched`: persona del cuadrante no registrada en la
+   app. Se guarda para auditoría pero **no genera ningún email** (ni al usuario
+   ni al editor) — comportamiento deseado mientras la mayoría no esté registrada.
 
 Resultado por asignación en `extracted_assignments.status`:
-`validated` → se notifica; `needs_review` → email al editor con el detalle de qué falló.
+`validated`/`notified` → notificada; `unmatched` → ignorada silenciosamente;
+`needs_review` → email al editor solo para problemas reales (discrepancias entre
+pasadas, fechas imposibles, nombres ambiguos, errores de envío).
 
 **5. Notificación — Brevo + .ics**
 - Un email por usuario y documento, con todas sus asignaciones del mes y un único `.ics` adjunto
