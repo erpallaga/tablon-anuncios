@@ -4,10 +4,6 @@ import type { GridItem, Announcement } from '../types';
 import { gridItemsService, announcementsService } from '../lib/supabase/database';
 
 interface AppContextType {
-  // Estado del panel de administración
-  isAdmin: boolean;
-  setIsAdmin: (isAdmin: boolean) => void;
-  
   // Elementos de la cuadrícula
   gridItems: GridItem[];
   addGridItem: (item: Omit<GridItem, 'id'>) => Promise<void>;
@@ -26,7 +22,6 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [isAdmin, setIsAdmin] = useState(false);
   const [gridItems, setGridItems] = useState<GridItem[]>([]);
   const [allAnnouncements, setAllAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,8 +147,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider
       value={{
-        isAdmin,
-        setIsAdmin,
         gridItems,
         addGridItem,
         updateGridItem,

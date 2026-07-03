@@ -1,4 +1,4 @@
-import { supabase } from './client';
+import { supabase, supabaseAnon } from './client';
 import type { GridItem, Announcement } from '../../types';
 
 // Helper to convert database row to GridItem
@@ -7,8 +7,10 @@ function mapGridItem(row: any): GridItem {
     id: row.id,
     title: row.title,
     icon: row.icon,
-    pdfUrl: row.pdf_url,
+    fileUrl: row.pdf_url,
+    fileType: row.file_type ?? undefined,
     order: row.order ?? 0,
+    extractAssignments: row.extract_assignments ?? false,
   };
 }
 
@@ -28,7 +30,7 @@ function mapAnnouncement(row: any): Announcement {
 // GridItems operations
 export const gridItemsService = {
   async getAll(): Promise<GridItem[]> {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAnon
       .from('grid_items')
       .select('*')
       .order('order', { ascending: true });
@@ -43,8 +45,10 @@ export const gridItemsService = {
       .insert([{
         title: item.title,
         icon: item.icon,
-        pdf_url: item.pdfUrl,
+        pdf_url: item.fileUrl,
+        file_type: item.fileType ?? null,
         order: item.order ?? 0,
+        extract_assignments: item.extractAssignments ?? false,
       }])
       .select()
       .single();
@@ -57,8 +61,10 @@ export const gridItemsService = {
     const updateData: any = {};
     if (updates.title !== undefined) updateData.title = updates.title;
     if (updates.icon !== undefined) updateData.icon = updates.icon;
-    if (updates.pdfUrl !== undefined) updateData.pdf_url = updates.pdfUrl;
+    if (updates.fileUrl !== undefined) updateData.pdf_url = updates.fileUrl;
+    if (updates.fileType !== undefined) updateData.file_type = updates.fileType;
     if (updates.order !== undefined) updateData.order = updates.order;
+    if (updates.extractAssignments !== undefined) updateData.extract_assignments = updates.extractAssignments;
 
     const { data, error } = await supabase
       .from('grid_items')
@@ -84,7 +90,7 @@ export const gridItemsService = {
 // Announcements operations
 export const announcementsService = {
   async getAll(): Promise<Announcement[]> {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAnon
       .from('announcements')
       .select('*')
       .order('order', { ascending: true });
