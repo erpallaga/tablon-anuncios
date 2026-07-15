@@ -5,9 +5,12 @@ export interface GridItem {
   fileUrl: string;
   fileType?: 'pdf' | 'image';
   order?: number; // Hacer opcional para permitir la creación sin especificar order
-  // Cuadrante RSC: al crearse, la Edge Function extract-assignments analiza el
-  // documento y notifica a los usuarios asignados
+  // Al crearse, la Edge Function extract-assignments analiza el documento y
+  // notifica a los usuarios asignados
   extractAssignments?: boolean;
+  // Qué formato de documento analiza la función: cuadrante RSC de servicio del
+  // campo o programa de la reunión Vida y Ministerio
+  documentType?: 'field_service' | 'vmc_program';
 }
 
 export interface MenuItem extends GridItem {}
