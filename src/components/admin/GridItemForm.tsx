@@ -29,7 +29,7 @@ const EMOJIS = [
 
 export default function GridItemForm({ item, onSave, onCancel, isNew = false }: GridItemFormProps) {
   const [formData, setFormData] = useState<Omit<GridItem, 'id' | 'order'>>(
-    item || { title: '', icon: '📄', fileUrl: '', fileType: undefined, extractAssignments: false }
+    item || { title: '', icon: '📄', fileUrl: '', fileType: undefined, extractAssignments: false, documentType: 'field_service' }
   );
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -256,6 +256,24 @@ export default function GridItemForm({ item, onSave, onCancel, isNew = false }: 
                         </span>
                       </span>
                     </label>
+                    {formData.extractAssignments && (
+                      <div className="mt-2 ml-6">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Tipo de documento
+                        </label>
+                        <select
+                          value={formData.documentType ?? 'field_service'}
+                          onChange={(e) => setFormData(prev => ({
+                            ...prev,
+                            documentType: e.target.value as GridItem['documentType'],
+                          }))}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="field_service">Cuadrante RSC (servicio del campo)</option>
+                          <option value="vmc_program">Programa Vida y Ministerio (VyM)</option>
+                        </select>
+                      </div>
+                    )}
                   </div>
                 )}
 
